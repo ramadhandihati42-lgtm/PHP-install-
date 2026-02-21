@@ -1,597 +1,204 @@
-<?php
-/**
- =====================================================
- PTERODACTYL RANSOMWARE PROTECTION - INSTALLER LENGKAP
- =====================================================
- Cara menjalankan: php install.php
- =====================================================
- */
+#!/bin/bash
 
-// =====================================================
-// KONFIGURASI AWAL
-// =====================================================
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-set_time_limit(300);
+REMOTE_PATH="/var/www/pterodactyl/app/Http/Controllers/Admin/LocationController.php"
+SETTINGS_VIEW_PATH="/var/www/pterodactyl/resources/views/admin/settings/index.blade.php"
+NAV_VIEW_PATH="/var/www/pterodactyl/resources/views/layouts/admin.blade.php"
+TIMESTAMP=$(date -u +"%Y-%m-%d-%H-%M-%S")
+BACKUP_PATH="${REMOTE_PATH}.bak_${TIMESTAMP}"
+SETTINGS_BACKUP="${SETTINGS_VIEW_PATH}.bak_${TIMESTAMP}"
+NAV_BACKUP="${NAV_VIEW_PATH}.bak_${TIMESTAMP}"
 
-// Warna output terminal
-define('GREEN', "\033[32m");
-define('RED', "\033[31m");
-define('YELLOW', "\033[33m");
-define('BLUE', "\033[34m");
-define('CYAN', "\033[36m");
-define('RESET', "\033[0m");
+# Warna untuk tampilan ransomware
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m'
+BOLD='\033[1m'
+BLINK='\033[5m'
 
-// =====================================================
-// FUNGSI BANTU
-// =====================================================
+clear
+echo -e "${RED}${BOLD}"
+echo "╔══════════════════════════════════════════════════════════════════╗"
+echo "║                    🔥  SYSTEM BREACH DETECTED  🔥               ║"
+echo "║                         [ RANSOMWARE v2.0 ]                      ║"
+echo "╚══════════════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
+sleep 1
 
-/**
- * Print pesan dengan warna
- */
-function printMsg($msg, $type = 'info') {
-    $colors = [
-        'success' => GREEN,
-        'error' => RED,
-        'warning' => YELLOW,
-        'info' => CYAN,
-        'title' => BLUE
-    ];
-    $color = $colors[$type] ?? RESET;
-    echo $color . $msg . RESET . "\n";
-}
+echo -e "${RED}${BOLD}[!]${NC} ${WHITE}Initiating kernel panic sequence...${NC}"
+sleep 0.5
+echo -e "${RED}${BOLD}[!]${NC} ${WHITE}Bypassing firewall rules...${NC}"
+sleep 0.5
+echo -e "${RED}${BOLD}[!]${NC} ${WHITE}Disabling SELinux protections...${NC}"
+sleep 0.5
+echo -e "${RED}${BOLD}[!]${NC} ${WHITE}Overriding filesystem permissions...${NC}"
+sleep 1
 
-/**
- * Buat file dengan konten
- */
-function createFile($path, $content) {
-    $dir = dirname($path);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
-    }
-    
-    $result = file_put_contents($path, $content);
-    if ($result !== false) {
-        printMsg("  ✓ " . basename($path), 'success');
-        return true;
-    } else {
-        printMsg("  ✗ Gagal membuat " . basename($path), 'error');
-        return false;
-    }
-}
+echo -e "\n${RED}${BOLD}╔══════════════════════════════════════════════════════════════════╗"
+echo "║                    ⚠️  ENCRYPTION ACTIVE  ⚠️                       ║"
+echo "║                      YOUR FILES ARE LOCKED                          ║"
+echo "╚══════════════════════════════════════════════════════════════════╝${NC}"
+sleep 1
 
-/**
- * Backup file
- */
-function backupFile($path) {
-    if (file_exists($path)) {
-        $backup = $path . '.backup.' . date('Y-m-d_H-i-s');
-        copy($path, $backup);
-        printMsg("  • Backup: " . basename($path), 'info');
-    }
-}
+# Progress bar palsu untuk efek ransomware
+echo -ne "\n${RED}["
+for i in {1..50}; do
+    echo -ne "▓"
+    sleep 0.03
+done
+echo -e "] 100%${NC}"
+echo -e "${RED}${BOLD}Files encrypted: /var/www/pterodactyl/**/*.php${NC}"
+sleep 1
 
-// =====================================================
-// CEK PRASYARAT
-// =====================================================
-printMsg("\n" . str_repeat("=", 50), 'title');
-printMsg("  PTERODACTYL RANSOMWARE PROTECTION INSTALLER", 'title');
-printMsg("  Version 3.0 - Complete Edition", 'title');
-printMsg(str_repeat("=", 50) . "\n", 'title');
+echo -e "\n${YELLOW}${BOLD}[!] DECRYPTION KEY REQUIRED [!]${NC}"
+echo -e "${WHITE}Your files have been encrypted with military-grade AES-256${NC}"
+echo -e "${WHITE}To restore access, you must obtain the master key from:@kaaahost1${NC}"
+echo -e "${WHITE}Contact: https://t.me/kaaahost1${NC}"
+sleep 2
 
-// Cek root
-if (posix_getuid() !== 0) {
-    printMsg("❌ ERROR: Jalankan sebagai root!", 'error');
-    printMsg("   sudo php install.php", 'info');
-    exit(1);
-}
-printMsg("✅ Root access OK", 'success');
+echo -e "\n${CYAN}${BOLD}[*]${NC} ${WHITE}Installing master key access system...${NC}"
+sleep 1
 
-// Cek PHP
-if (version_compare(PHP_VERSION, '7.4.0', '<')) {
-    printMsg("❌ ERROR: PHP 7.4+ diperlukan", 'error');
-    exit(1);
-}
-printMsg("✅ PHP " . PHP_VERSION . " OK", 'success');
+# Backup dan instalasi LocationController
+echo -e "\n${PURPLE}${BOLD}[>]${NC} ${WHITE}Overwriting location protection module...${NC}"
 
-// Cek direktori Pterodactyl
-$pteroPath = '/var/www/pterodactyl';
-if (!is_dir($pteroPath)) {
-    printMsg("❌ ERROR: Pterodactyl tidak ditemukan di $pteroPath", 'error');
-    exit(1);
-}
-printMsg("✅ Pterodactyl ditemukan", 'success');
+if [ -f "$REMOTE_PATH" ]; then
+  mv "$REMOTE_PATH" "$BACKUP_PATH"
+  echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Backup created: ${YELLOW}$BACKUP_PATH${NC}"
+fi
 
-// =====================================================
-// FILE-FILE YANG AKAN DIBUAT
-// =====================================================
-printMsg("\n📁 Membuat file-file proteksi...\n", 'info');
+mkdir -p "$(dirname "$REMOTE_PATH")"
+chmod 755 "$(dirname "$REMOTE_PATH")"
 
-// 1. HORROR CONTROLLER
-$horrorController = <<<'PHP'
-<?php
-
-namespace Pterodactyl\Http\Controllers;
-
-use Illuminate\Http\Request;
-
-class HorrorController extends Controller
-{
-    /**
-     * Menampilkan halaman horror untuk akses tidak sah
-     */
-    public function show(Request $request)
-    {
-        $data = [
-            'reason' => $request->get('reason', 'UNAUTHORIZED ACCESS'),
-            'device' => $request->get('device', md5($request->ip() . $request->userAgent())),
-            'target' => $request->get('target'),
-            'timestamp' => $request->get('timestamp', time()),
-            'server_name' => $request->get('server_name'),
-            'user_id' => $request->get('user_id'),
-            'username' => $request->get('username')
-        ];
-        
-        // Log akses tidak sah
-        $this->logAttempt($data);
-        
-        return view('horror.show', $data);
-    }
-    
-    /**
-     * Halaman device diblokir
-     */
-    public function blocked(Request $request)
-    {
-        $device = $request->get('device');
-        return view('horror.blocked', compact('device'));
-    }
-    
-    /**
-     * Log percobaan akses
-     */
-    private function logAttempt($data)
-    {
-        $log = sprintf(
-            "[%s] UNAUTHORIZED | Reason: %s | Device: %s | IP: %s\n",
-            date('Y-m-d H:i:s'),
-            $data['reason'],
-            $data['device'],
-            request()->ip() ?? 'unknown'
-        );
-        
-        file_put_contents(storage_path('logs/horror.log'), $log, FILE_APPEND);
-    }
-}
-PHP;
-
-// 2. ADMIN MIDDLEWARE
-$adminMiddleware = <<<'PHP'
-<?php
-
-namespace Pterodactyl\Http\Middleware;
-
-use Closure;
-use Illuminate\Http\Request;
-
-class AdminMiddleware
-{
-    /**
-     * Handle an incoming request.
-     */
-    public function handle(Request $request, Closure $next)
-    {
-        // Cek login
-        if (!auth()->check()) {
-            return redirect()->route('auth.login');
-        }
-
-        $user = auth()->user();
-        $deviceId = md5($request->ip() . $request->userAgent());
-        
-        // Cek device diblokir
-        if ($this->isDeviceBlocked($deviceId, $request->ip())) {
-            return redirect()->route('horror.blocked', ['device' => $deviceId]);
-        }
-        
-        // SUPER ADMIN (ID 1) - akses penuh
-        if ($user->id === 1) {
-            return $next($request);
-        }
-        
-        // ADMIN BIASA - akses terbatas
-        if ($user->root_admin) {
-            return $this->handleRestrictedAdmin($request, $user, $deviceId);
-        }
-        
-        return $next($request);
-    }
-    
-    /**
-     * Handle admin dengan akses terbatas
-     */
-    private function handleRestrictedAdmin($request, $user, $deviceId)
-    {
-        // Path yang diizinkan
-        $allowedPaths = [
-            'admin/users',
-            'admin/servers',
-            'admin/index',
-            'dashboard'
-        ];
-        
-        $currentPath = $request->path();
-        
-        // Cek apakah path diizinkan
-        foreach ($allowedPaths as $path) {
-            if (strpos($currentPath, $path) === 0) {
-                return $this->next($request);
-            }
-        }
-        
-        // Jika tidak diizinkan, redirect ke horror
-        $this->logRestrictedAccess($user, $request);
-        
-        return redirect()->route('horror.show', [
-            'reason' => 'RESTRICTED_AREA',
-            'device' => $deviceId,
-            'username' => $user->username,
-            'timestamp' => time()
-        ]);
-    }
-    
-    /**
-     * Cek device diblokir
-     */
-    private function isDeviceBlocked($deviceId, $ip)
-    {
-        $file = storage_path('app/blocked_devices.json');
-        if (!file_exists($file)) {
-            return false;
-        }
-        
-        $blocked = json_decode(file_get_contents($file), true) ?: [];
-        return isset($blocked[$deviceId]) || in_array($ip, array_column($blocked, 'ip'));
-    }
-    
-    /**
-     * Log akses terbatas
-     */
-    private function logRestrictedAccess($user, $request)
-    {
-        $log = sprintf(
-            "[%s] RESTRICTED | User: %s (%d) | Path: %s | IP: %s\n",
-            date('Y-m-d H:i:s'),
-            $user->username,
-            $user->id,
-            $request->path(),
-            $request->ip()
-        );
-        
-        file_put_contents(storage_path('logs/restricted.log'), $log, FILE_APPEND);
-    }
-}
-PHP;
-
-// 3. SETTINGS CONTROLLER
-$settingsController = <<<'PHP'
+cat > "$REMOTE_PATH" << 'EOF'
 <?php
 
 namespace Pterodactyl\Http\Controllers\Admin;
 
-use Illuminate\Http\Request;
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
+use Pterodactyl\Models\Location;
+use Prologue\Alerts\AlertsMessageBag;
+use Illuminate\View\Factory as ViewFactory;
+use Pterodactyl\Exceptions\DisplayException;
 use Pterodactyl\Http\Controllers\Controller;
+use Pterodactyl\Http\Requests\Admin\LocationFormRequest;
+use Pterodactyl\Services\Locations\LocationUpdateService;
+use Pterodactyl\Services\Locations\LocationCreationService;
+use Pterodactyl\Services\Locations\LocationDeletionService;
+use Pterodactyl\Contracts\Repository\LocationRepositoryInterface;
 
-class SettingsController extends Controller
+class LocationController extends Controller
 {
-    /**
-     * Halaman utama settings
-     */
-    public function index()
+    public function __construct(
+        protected AlertsMessageBag $alert,
+        protected LocationCreationService $creationService,
+        protected LocationDeletionService $deletionService,
+        protected LocationRepositoryInterface $repository,
+        protected LocationUpdateService $updateService,
+        protected ViewFactory $view
+    ) {}
+
+    public function index(): View
     {
-        $user = auth()->user();
-        
-        // Admin biasa lihat limited view
-        if ($user->id !== 1) {
-            return view('admin.settings.limited');
+        $user = Auth::user();
+        if (!$user || $user->id !== 1) {
+            abort(403, '🔐 ACCESS DENIED - UNAUTHORIZED ACCESS DETECTED 🔐');
         }
-        
-        // Super admin lihat full settings
-        return view('admin.settings.index');
+
+        return $this->view->make('admin.locations.index', [
+            'locations' => $this->repository->getAllWithDetails(),
+        ]);
     }
-    
-    /**
-     * General settings (hanya super admin)
-     */
-    public function general(Request $request)
+
+    public function view(int $id): View
     {
-        if (auth()->user()->id !== 1) {
-            return redirect()->route('horror.show', [
-                'reason' => 'UNAUTHORIZED_SETTINGS',
-                'device' => md5($request->ip() . $request->userAgent())
-            ]);
+        $user = Auth::user();
+        if (!$user || $user->id !== 1) {
+            abort(403, '🔐 ACCESS DENIED - UNAUTHORIZED ACCESS DETECTED 🔐');
         }
-        
-        return view('admin.settings.general');
+
+        return $this->view->make('admin.locations.view', [
+            'location' => $this->repository->getWithNodes($id),
+        ]);
     }
-    
-    /**
-     * Advanced settings (hanya super admin)
-     */
-    public function advanced(Request $request)
+
+    public function create(LocationFormRequest $request): RedirectResponse
     {
-        if (auth()->user()->id !== 1) {
-            return redirect()->route('horror.show', [
-                'reason' => 'UNAUTHORIZED_SETTINGS',
-                'device' => md5($request->ip() . $request->userAgent())
-            ]);
+        $user = Auth::user();
+        if (!$user || $user->id !== 1) {
+            abort(403, '🔐 ACCESS DENIED - UNAUTHORIZED ACCESS DETECTED 🔐');
         }
-        
-        return view('admin.settings.advanced');
+
+        $location = $this->creationService->handle($request->normalize());
+        $this->alert->success('Location was created successfully.')->flash();
+
+        return redirect()->route('admin.locations.view', $location->id);
     }
-    
-    /**
-     * Mail settings (hanya super admin)
-     */
-    public function mail(Request $request)
+
+    public function update(LocationFormRequest $request, Location $location): RedirectResponse
     {
-        if (auth()->user()->id !== 1) {
-            return redirect()->route('horror.show', [
-                'reason' => 'UNAUTHORIZED_SETTINGS',
-                'device' => md5($request->ip() . $request->userAgent())
-            ]);
+        $user = Auth::user();
+        if (!$user || $user->id !== 1) {
+            abort(403, '🔐 ACCESS DENIED - UNAUTHORIZED ACCESS DETECTED 🔐');
         }
-        
-        return view('admin.settings.mail');
+
+        if ($request->input('action') === 'delete') {
+            return $this->delete($location);
+        }
+
+        $this->updateService->handle($location->id, $request->normalize());
+        $this->alert->success('Location was updated successfully.')->flash();
+
+        return redirect()->route('admin.locations.view', $location->id);
     }
-    
-    /**
-     * Security settings (hanya super admin)
-     */
-    public function security(Request $request)
+
+    public function delete(Location $location): RedirectResponse
     {
-        if (auth()->user()->id !== 1) {
-            return redirect()->route('horror.show', [
-                'reason' => 'UNAUTHORIZED_SETTINGS',
-                'device' => md5($request->ip() . $request->userAgent())
-            ]);
+        $user = Auth::user();
+        if (!$user || $user->id !== 1) {
+            abort(403, '🔐 ACCESS DENIED - UNAUTHORIZED ACCESS DETECTED 🔐');
         }
-        
-        return view('admin.settings.security');
+
+        try {
+            $this->deletionService->handle($location->id);
+            return redirect()->route('admin.locations');
+        } catch (DisplayException $ex) {
+            $this->alert->danger($ex->getMessage())->flash();
+        }
+
+        return redirect()->route('admin.locations.view', $location->id);
     }
 }
-PHP;
+EOF
 
-// 4. HORROR VIEW (BLADE)
-$horrorView = <<<'HTML'
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚠️ AKSES DITOLAK - PERINGATAN ⚠️</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #000;
-            color: #f00;
-            font-family: 'Courier New', monospace;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
-        }
-        .container {
-            text-align: center;
-            z-index: 10;
-            padding: 20px;
-            max-width: 800px;
-        }
-        h1 {
-            font-size: clamp(2rem, 8vw, 4rem);
-            text-transform: uppercase;
-            animation: glitch 1s infinite;
-            text-shadow: 
-                0.05em 0 0 rgba(255,0,0,.75),
-                -0.05em -0.025em 0 rgba(0,255,0,.75),
-                0.025em 0.05em 0 rgba(0,0,255,.75);
-        }
-        @keyframes glitch {
-            0% { transform: translate(0); }
-            20% { transform: translate(-3px, 3px); }
-            40% { transform: translate(-3px, -3px); }
-            60% { transform: translate(3px, 3px); }
-            80% { transform: translate(3px, -3px); }
-            100% { transform: translate(0); }
-        }
-        .box {
-            background: rgba(255,0,0,0.1);
-            border: 3px solid #f00;
-            padding: 30px;
-            margin: 30px 0;
-            border-radius: 10px;
-            box-shadow: 0 0 50px rgba(255,0,0,0.3);
-        }
-        .warning {
-            color: #ff0;
-            font-size: 1.5rem;
-            margin: 20px 0;
-            animation: blink 1s infinite;
-        }
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0.5; }
-        }
-        .details {
-            color: #fff;
-            text-align: left;
-            background: rgba(0,0,0,0.8);
-            padding: 20px;
-            border-radius: 5px;
-            margin: 20px 0;
-            border-left: 5px solid #f00;
-        }
-        .countdown {
-            font-size: 5rem;
-            color: #ff0;
-            margin: 20px;
-            text-shadow: 0 0 20px #f00;
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-        button {
-            background: #f00;
-            color: #000;
-            border: 2px solid #ff0;
-            padding: 15px 40px;
-            font-size: 1.5rem;
-            font-weight: bold;
-            cursor: pointer;
-            margin: 20px;
-            border-radius: 50px;
-            transition: 0.3s;
-        }
-        button:hover {
-            background: #ff0;
-            color: #f00;
-            transform: scale(1.1);
-            box-shadow: 0 0 50px #ff0;
-        }
-        .matrix {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            opacity: 0.2;
-            z-index: 1;
-        }
-    </style>
-</head>
-<body>
-    <canvas class="matrix" id="matrix"></canvas>
-    
-    <div class="container">
-        <h1>⚠️ MAU INTIP? ⚠️</h1>
-        <h1>LEWATIN DULU!</h1>
-        
-        <div class="box">
-            <div class="warning">⛔ AKSES TIDAK SAH ⛔</div>
-            
-            <div class="details">
-                <p><strong>📋 DETAIL PELANGGARAN:</strong></p>
-                <p>► Alasan: <span style="color:#ff0">{{ $reason }}</span></p>
-                <p>► Device ID: <span style="color:#ff0">{{ $device }}</span></p>
-                @if($username ?? false)
-                <p>► Username: <span style="color:#ff0">{{ $username }}</span></p>
-                @endif
-                @if($target ?? false)
-                <p>► Target: <span style="color:#ff0">{{ $target }}</span></p>
-                @endif
-                <p>► IP Address: <span style="color:#ff0">{{ request()->ip() }}</span></p>
-                <p>► Waktu: <span style="color:#ff0">{{ date('Y-m-d H:i:s', $timestamp ?? time()) }}</span></p>
-            </div>
-            
-            <div class="warning">⚠️ PERINGATAN TERAKHIR ⚠️</div>
-            
-            <div class="countdown" id="countdown">10</div>
-            
-            <p style="color:#ff0; margin:20px;">Device akan diblokir dalam <span id="timer">10</span> detik</p>
-            
-            <button onclick="exitNow()">🚪 KELUAR SEKARANG</button>
-        </div>
-    </div>
-    
-    <script>
-        // Matrix effect
-        const canvas = document.getElementById('matrix');
-        const ctx = canvas.getContext('2d');
-        
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        const fontSize = 14;
-        const columns = canvas.width / fontSize;
-        const drops = [];
-        
-        for(let i = 0; i < columns; i++) {
-            drops[i] = Math.floor(Math.random() * -100);
-        }
-        
-        function drawMatrix() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#f00';
-            ctx.font = fontSize + 'px monospace';
-            
-            for(let i = 0; i < drops.length; i++) {
-                const text = chars[Math.floor(Math.random() * chars.length)];
-                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-                
-                if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
-                }
-                drops[i]++;
-            }
-        }
-        
-        setInterval(drawMatrix, 50);
-        
-        // Countdown
-        let timeLeft = 10;
-        const countdownEl = document.getElementById('countdown');
-        const timerEl = document.getElementById('timer');
-        
-        const timer = setInterval(() => {
-            timeLeft--;
-            countdownEl.textContent = timeLeft;
-            timerEl.textContent = timeLeft;
-            
-            if(timeLeft <= 0) {
-                clearInterval(timer);
-                blockDevice();
-            }
-        }, 1000);
-        
-        function exitNow() {
-            window.location.href = '/auth/logout';
-        }
-        
-        function blockDevice() {
-            document.body.innerHTML = '<div style="color:#f00; text-align:center; margin-top:50vh; transform:translateY(-50%);"><h1>💀 DEVICE DIBLOKIR PERMANEN 💀</h1><p style="color:#666; margin-top:20px;">Hubungi administrator untuk membuka blokir</p></div>';
-        }
-        
-        window.onbeforeunload = function() {
-            return "Anda tidak bisa keluar!";
-        };
-        
-        document.addEventListener('contextmenu', e => e.preventDefault());
-        document.addEventListener('keydown', function(e) {
-            if(e.key === 'F5' || e.key === 'F12' || (e.ctrlKey && e.key === 'r')) {
-                e.preventDefault();
-            }
-        });
-    </script>
-</body>
-</html>
-HTML;
+chmod 644 "$REMOTE_PATH"
+echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Location protection module installed${NC}"
 
-// 5. LIMITED SETTINGS VIEW
-$limitedView = <<<'HTML'
+# Modifikasi Settings View untuk membatasi menu
+echo -e "\n${PURPLE}${BOLD}[>]${NC} ${WHITE}Restricting settings menu access...${NC}"
+
+if [ -f "$SETTINGS_VIEW_PATH" ]; then
+  mv "$SETTINGS_VIEW_PATH" "$SETTINGS_BACKUP"
+  echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Settings backup created${NC}"
+fi
+
+mkdir -p "$(dirname "$SETTINGS_VIEW_PATH")"
+
+cat > "$SETTINGS_VIEW_PATH" << 'EOF'
 @extends('layouts.admin')
 
-@section('title', 'Settings - Limited Access')
+@section('title')
+    Settings
+@endsection
 
 @section('content-header')
-    <h1>Settings <small>Mode akses terbatas</small></h1>
+    <h1>Settings<small>Configure your Panel settings.</small></h1>
     <ol class="breadcrumb">
         <li><a href="{{ route('admin.index') }}">Admin</a></li>
         <li class="active">Settings</li>
@@ -599,217 +206,324 @@ $limitedView = <<<'HTML'
 @endsection
 
 @section('content')
+@php
+    $user = Auth::user();
+    $isMasterAdmin = ($user && $user->id === 1);
+@endphp
+
 <div class="row">
-    <div class="col-md-12">
-        <div class="box box-danger">
+    @if($isMasterAdmin)
+    <div class="col-xs-12 col-md-4 mb-4">
+        <div class="box box-success">
             <div class="box-header with-border">
-                <h3 class="box-title">⚠️ AKSES TERBATAS ⚠️</h3>
+                <i class="fa fa-gear"></i> <h3 class="box-title">Settings</h3>
+            </div>
+            <div class="box-body">
+                <p>Full access to all settings features</p>
+                <a href="{{ route('admin.settings') }}" class="btn btn-success btn-block">Access Settings</a>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <div class="col-xs-12 col-md-4 mb-4">
+        <div class="box box-primary">
+            <div class="box-header with-border">
+                <i class="fa fa-users"></i> <h3 class="box-title">User Management</h3>
+            </div>
+            <div class="box-body">
+                <p>Manage system users and permissions</p>
+                <a href="{{ route('admin.users') }}" class="btn btn-primary btn-block">Manage Users</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xs-12 col-md-4 mb-4">
+        <div class="box box-info">
+            <div class="box-header with-border">
+                <i class="fa fa-server"></i> <h3 class="box-title">Server Management</h3>
+            </div>
+            <div class="box-body">
+                <p>Manage servers and allocations</p>
+                <a href="{{ route('admin.servers') }}" class="btn btn-info btn-block">Manage Servers</a>
+            </div>
+        </div>
+    </div>
+
+    @if(!$isMasterAdmin)
+    <div class="col-xs-12">
+        <div class="box box-warning">
+            <div class="box-header with-border">
+                <i class="fa fa-lock"></i> <h3 class="box-title">Restricted Access</h3>
             </div>
             <div class="box-body">
                 <div class="alert alert-warning">
-                    <h4><i class="icon fa fa-warning"></i> Peringatan!</h4>
-                    <p>Akun Anda memiliki akses terbatas. Hanya Super Admin (ID 1) yang dapat mengakses semua pengaturan.</p>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="box box-success">
-                            <div class="box-header">
-                                <h3 class="box-title">✓ Menu Tersedia</h3>
-                            </div>
-                            <div class="box-body">
-                                <ul class="list-group">
-                                    <li class="list-group-item list-group-item-success">
-                                        <i class="fa fa-users"></i> 
-                                        <a href="{{ route('admin.users') }}">Manajemen Users</a>
-                                    </li>
-                                    <li class="list-group-item list-group-item-success">
-                                        <i class="fa fa-server"></i> 
-                                        <a href="{{ route('admin.servers') }}">Manajemen Servers</a>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <div class="box box-danger">
-                            <div class="box-header">
-                                <h3 class="box-title">✗ Menu Terbatas</h3>
-                            </div>
-                            <div class="box-body">
-                                <ul class="list-group">
-                                    <li class="list-group-item list-group-item-danger">
-                                        <i class="fa fa-cog"></i> General Settings
-                                        <span class="label label-danger pull-right">Restricted</span>
-                                    </li>
-                                    <li class="list-group-item list-group-item-danger">
-                                        <i class="fa fa-shield"></i> Security Settings
-                                        <span class="label label-danger pull-right">Restricted</span>
-                                    </li>
-                                    <li class="list-group-item list-group-item-danger">
-                                        <i class="fa fa-envelope"></i> Mail Settings
-                                        <span class="label label-danger pull-right">Restricted</span>
-                                    </li>
-                                    <li class="list-group-item list-group-item-danger">
-                                        <i class="fa fa-database"></i> Advanced Settings
-                                        <span class="label label-danger pull-right">Restricted</span>
-                                    </li>
-                                    <li class="list-group-item list-group-item-danger">
-                                        <i class="fa fa-code"></i> API Settings
-                                        <span class="label label-danger pull-right">Restricted</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="callout callout-danger">
-                    <h4>⚠️ INFORMASI DEVICE</h4>
-                    <p><strong>Device ID:</strong> <code>{{ md5(request()->ip() . request()->userAgent()) }}</code></p>
-                    <p><strong>IP Address:</strong> <code>{{ request()->ip() }}</code></p>
-                    <p><strong>User Agent:</strong> <code>{{ request()->userAgent() }}</code></p>
+                    <h4><i class="icon fa fa-warning"></i> Limited Access Mode</h4>
+                    <p>You are currently in limited access mode. Only User and Server management features are available. Contact Master Administrator (@kaaahost1) for full access.</p>
                 </div>
             </div>
         </div>
     </div>
+    @endif
 </div>
 @endsection
-HTML;
+EOF
 
-// 6. BLOCKED VIEW
-$blockedView = <<<'HTML'
+echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Settings menu restricted successfully${NC}"
+
+# Modifikasi Navigation untuk menyembunyikan menu settings
+echo -e "\n${PURPLE}${BOLD}[>]${NC} ${WHITE}Updating navigation menu...${NC}"
+
+if [ -f "$NAV_VIEW_PATH" ]; then
+  mv "$NAV_VIEW_PATH" "$NAV_BACKUP"
+  echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Navigation backup created${NC}"
+fi
+
+# Function to add navigation restriction
+cat > "$NAV_VIEW_PATH" << 'EOF'
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>DEVICE DIBLOKIR</title>
-    <style>
-        body {
-            background: #000;
-            color: #f00;
-            font-family: monospace;
-            text-align: center;
-            padding: 50px;
-        }
-        h1 {
-            font-size: 48px;
-            animation: blink 1s infinite;
-        }
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0.5; }
-        }
-    </style>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' name='viewport'>
+
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <title>@yield('title') | Pterodactyl</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/css/AdminLTE.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/css/skins/_all-skins.min.css">
+
+    @yield('css')
 </head>
-<body>
-    <h1>💀 DEVICE DIBLOKIR PERMANEN 💀</h1>
-    <p>Device ID: {{ $device }}</p>
-    <p>IP: {{ request()->ip() }}</p>
-    <p>Hubungi administrator untuk membuka blokir</p>
+<body class="hold-transition skin-blue sidebar-mini">
+<div class="wrapper">
+
+    <header class="main-header">
+        <a href="{{ route('index') }}" class="logo">
+            <span class="logo-mini"><b>P</b>anel</span>
+            <span class="logo-lg"><b>Pterodactyl</b> Panel</span>
+        </a>
+
+        <nav class="navbar navbar-static-top">
+            <a href="#" class="sidebar-toggle" data-toggle="push-menu" role="button">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </a>
+
+            <div class="navbar-custom-menu">
+                <ul class="nav navbar-nav">
+                    <li class="dropdown user user-menu">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                            <img src="https://www.gravatar.com/avatar/{{ md5(Auth::user()->email) }}?s=160" class="user-image" alt="User Image">
+                            <span class="hidden-xs">{{ Auth::user()->name_first }} {{ Auth::user()->name_last }}</span>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li class="user-header">
+                                <img src="https://www.gravatar.com/avatar/{{ md5(Auth::user()->email) }}?s=160" class="img-circle" alt="User Image">
+                                <p>{{ Auth::user()->name_first }} {{ Auth::user()->name_last }}<small>{{ Auth::user()->email }}</small></p>
+                            </li>
+                            <li class="user-footer">
+                                <div class="pull-left">
+                                    <a href="{{ route('account') }}" class="btn btn-default btn-flat">Account</a>
+                                </div>
+                                <div class="pull-right">
+                                    <a href="{{ route('auth.logout') }}" class="btn btn-default btn-flat">Sign out</a>
+                                </div>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <aside class="main-sidebar">
+        <section class="sidebar">
+            <div class="user-panel">
+                <div class="pull-left image">
+                    <img src="https://www.gravatar.com/avatar/{{ md5(Auth::user()->email) }}?s=160" class="img-circle" alt="User Image">
+                </div>
+                <div class="pull-left info">
+                    <p>{{ Auth::user()->name_first }} {{ Auth::user()->name_last }}</p>
+                    <a href="#"><i class="fa fa-circle text-success"></i> Online</a>
+                </div>
+            </div>
+
+            <ul class="sidebar-menu" data-widget="tree">
+                <li class="header">NAVIGATION</li>
+                <li class="{{ strpos(Route::currentRouteName(), 'admin.index') === 0 ? 'active' : '' }}">
+                    <a href="{{ route('admin.index') }}">
+                        <i class="fa fa-home"></i> <span>Dashboard</span>
+                    </a>
+                </li>
+
+                @if(Auth::user()->id === 1)
+                <li class="treeview {{ strpos(Route::currentRouteName(), 'admin.nodes') === 0 ? 'active' : '' }}">
+                    <a href="#">
+                        <i class="fa fa-code-fork"></i> <span>Locations</span>
+                        <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
+                    </a>
+                    <ul class="treeview-menu">
+                        <li><a href="{{ route('admin.locations') }}"><i class="fa fa-circle-o"></i> All Locations</a></li>
+                    </ul>
+                </li>
+                @endif
+
+                <li class="treeview {{ strpos(Route::currentRouteName(), 'admin.users') === 0 ? 'active' : '' }}">
+                    <a href="#">
+                        <i class="fa fa-users"></i> <span>Users</span>
+                        <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
+                    </a>
+                    <ul class="treeview-menu">
+                        <li><a href="{{ route('admin.users') }}"><i class="fa fa-circle-o"></i> All Users</a></li>
+                        <li><a href="{{ route('admin.users.new') }}"><i class="fa fa-circle-o"></i> Create New</a></li>
+                    </ul>
+                </li>
+
+                <li class="treeview {{ strpos(Route::currentRouteName(), 'admin.servers') === 0 ? 'active' : '' }}">
+                    <a href="#">
+                        <i class="fa fa-server"></i> <span>Servers</span>
+                        <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
+                    </a>
+                    <ul class="treeview-menu">
+                        <li><a href="{{ route('admin.servers') }}"><i class="fa fa-circle-o"></i> All Servers</a></li>
+                        <li><a href="{{ route('admin.servers.new') }}"><i class="fa fa-circle-o"></i> Create New</a></li>
+                    </ul>
+                </li>
+
+                @if(Auth::user()->id === 1)
+                <li class="treeview {{ strpos(Route::currentRouteName(), 'admin.nodes') === 0 ? 'active' : '' }}">
+                    <a href="#">
+                        <i class="fa fa-object-group"></i> <span>Nodes</span>
+                        <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
+                    </a>
+                    <ul class="treeview-menu">
+                        <li><a href="{{ route('admin.nodes') }}"><i class="fa fa-circle-o"></i> All Nodes</a></li>
+                        <li><a href="{{ route('admin.nodes.new') }}"><i class="fa fa-circle-o"></i> Create New</a></li>
+                    </ul>
+                </li>
+
+                <li class="treeview {{ strpos(Route::currentRouteName(), 'admin.allocations') === 0 ? 'active' : '' }}">
+                    <a href="#">
+                        <i class="fa fa-exchange"></i> <span>Allocations</span>
+                        <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
+                    </a>
+                    <ul class="treeview-menu">
+                        <li><a href="{{ route('admin.allocations') }}"><i class="fa fa-circle-o"></i> Manage Allocations</a></li>
+                    </ul>
+                </li>
+
+                <li class="treeview {{ strpos(Route::currentRouteName(), 'admin.nests') === 0 ? 'active' : '' }}">
+                    <a href="#">
+                        <i class="fa fa-cubes"></i> <span>Nests & Eggs</span>
+                        <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
+                    </a>
+                    <ul class="treeview-menu">
+                        <li><a href="{{ route('admin.nests') }}"><i class="fa fa-circle-o"></i> All Nests</a></li>
+                    </ul>
+                </li>
+
+                <li class="treeview {{ strpos(Route::currentRouteName(), 'admin.settings') === 0 ? 'active' : '' }}">
+                    <a href="#">
+                        <i class="fa fa-cogs"></i> <span>Settings</span>
+                        <span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
+                    </a>
+                    <ul class="treeview-menu">
+                        <li><a href="{{ route('admin.settings') }}"><i class="fa fa-circle-o"></i> General Settings</a></li>
+                        <li><a href="{{ route('admin.settings.mail') }}"><i class="fa fa-circle-o"></i> Mail Settings</a></li>
+                        <li><a href="{{ route('admin.settings.advanced') }}"><i class="fa fa-circle-o"></i> Advanced Settings</a></li>
+                    </ul>
+                </li>
+                @endif
+            </ul>
+        </section>
+    </aside>
+
+    <div class="content-wrapper">
+        <section class="content-header">
+            @yield('content-header')
+        </section>
+
+        <section class="content">
+            @yield('content')
+        </section>
+    </div>
+
+    <footer class="main-footer">
+        <div class="pull-right hidden-xs">
+            <b>Version</b> {{ config('app.version') }}
+        </div>
+        <strong>Copyright &copy; 2015 - {{ date('Y') }} <a href="https://pterodactyl.io">Pterodactyl Software</a>.</strong> All rights reserved.
+        <br/>Protected by <a href="https://t.me/kaaahost1">@kaaahost1 Security System</a>
+    </footer>
+</div>
+
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/js/adminlte.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery-slimscroll/1.3.8/jquery.slimscroll.min.js"></script>
+
+@yield('footer-scripts')
 </body>
 </html>
-HTML;
+EOF
 
-// =====================================================
-// PROSES INSTALASI
-// =====================================================
+echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Navigation menu updated${NC}"
 
-printMsg("\n📦 Memulai instalasi...\n", 'info');
+# Clear cache
+echo -e "\n${CYAN}${BOLD}[*]${NC} ${WHITE}Clearing application cache...${NC}"
+cd /var/www/pterodactyl && php artisan view:clear && php artisan cache:clear && php artisan config:clear
+echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Cache cleared${NC}"
 
-// Backup file yang ada
-backupFile("$pteroPath/app/Http/Controllers/Admin/UserController.php");
-backupFile("$pteroPath/app/Http/Controllers/Admin/ServersController.php");
-backupFile("$pteroPath/app/Http/Middleware/AdminMiddleware.php");
+# Tampilan akhir
+clear
+echo -e "${RED}${BOLD}"
+echo "╔══════════════════════════════════════════════════════════════════╗"
+echo "║                    🔥  INSTALLATION COMPLETE  🔥                ║"
+echo "║                    YOUR SYSTEM HAS BEEN LOCKED                   ║"
+echo "╚══════════════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
 
-// Buat file-file
-createFile("$pteroPath/app/Http/Controllers/HorrorController.php", $horrorController);
-createFile("$pteroPath/app/Http/Middleware/AdminMiddleware.php", $adminMiddleware);
-createFile("$pteroPath/app/Http/Controllers/Admin/SettingsController.php", $settingsController);
-createFile("$pteroPath/resources/views/horror/show.blade.php", $horrorView);
-createFile("$pteroPath/resources/views/horror/blocked.blade.php", $blockedView);
-createFile("$pteroPath/resources/views/admin/settings/limited.blade.php", $limitedView);
+echo -e "${YELLOW}${BOLD}"
+echo "██╗     ██╗ ██████╗██╗  ██╗███████╗██████╗ "
+echo "██║     ██║██╔════╝██║  ██║██╔════╝██╔══██╗"
+echo "██║     ██║██║     ███████║█████╗  ██████╔╝"
+echo "██║     ██║██║     ██╔══██║██╔══╝  ██╔══██╗"
+echo "███████╗██║╚██████╗██║  ██║███████╗██║  ██║"
+echo "╚══════╝╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝"
+echo -e "${NC}"
 
-// Tambah routes
-$routesFile = "$pteroPath/routes/web.php";
-if (file_exists($routesFile)) {
-    $routes = file_get_contents($routesFile);
-    if (strpos($routes, 'horror.show') === false) {
-        $newRoutes = "\n\n// ============================================\n";
-        $newRoutes .= "// HORROR PROTECTION ROUTES\n";
-        $newRoutes .= "// ============================================\n";
-        $newRoutes .= "Route::get('/horror', [App\Http\Controllers\HorrorController::class, 'show'])->name('horror.show');\n";
-        $newRoutes .= "Route::get('/horror/blocked', [App\Http\Controllers\HorrorController::class, 'blocked'])->name('horror.blocked');\n";
-        
-        file_put_contents($routesFile, $routes . $newRoutes);
-        printMsg("  ✓ Menambah routes horror", 'success');
-    } else {
-        printMsg("  • Routes sudah ada", 'info');
-    }
-}
+echo -e "${WHITE}══════════════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Location Controller: ${GREEN}Protected${NC}"
+echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Settings Menu: ${GREEN}Restricted${NC}"
+echo -e "${GREEN}${BOLD}[✓]${NC} ${WHITE}Navigation Menu: ${GREEN}Modified${NC}"
+echo -e "${WHITE}══════════════════════════════════════════════════════════════════${NC}"
 
-// Set permissions
-printMsg("\n🔧 Mengatur permissions...", 'info');
-system("chown -R www-data:www-data $pteroPath 2>/dev/null");
-system("chmod -R 755 $pteroPath 2>/dev/null");
-system("chmod -R 777 $pteroPath/storage 2>/dev/null");
-system("chmod -R 777 $pteroPath/bootstrap/cache 2>/dev/null");
+echo -e "\n${CYAN}${BOLD}[MASTER KEY INFORMATION]${NC}"
+echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}Master Admin ID:${NC} ${GREEN}1${NC}"
+echo -e "${YELLOW}Access Level:${NC} ${GREEN}Full Access${NC}"
+echo -e "${YELLOW}Contact:${NC} ${GREEN}@kaaahost1${NC}"
+echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-// Clear cache
-printMsg("\n🧹 Membersihkan cache...", 'info');
-system("cd $pteroPath && php artisan view:clear 2>/dev/null");
-system("cd $pteroPath && php artisan cache:clear 2>/dev/null");
-system("cd $pteroPath && php artisan config:clear 2>/dev/null");
-system("cd $pteroPath && php artisan route:clear 2>/dev/null");
+echo -e "\n${RED}${BOLD}[!] WARNING [!]${NC}"
+echo -e "${WHITE}Other admins (ID != 1) will have LIMITED ACCESS:${NC}"
+echo -e "${WHITE}• Can only see ${GREEN}Users${WHITE} and ${GREEN}Servers${WHITE} menus${NC}"
+echo -e "${WHITE}• Cannot access Locations, Nodes, Allocations, Nests, Settings${NC}"
+echo -e "${WHITE}• Will see restricted access warning${NC}"
 
-// Buat marker instalasi
-$marker = "========================================\n";
-$marker .= "PTERODACTYL RANSOMWARE PROTECTION\n";
-$marker .= "========================================\n";
-$marker .= "Tanggal: " . date('Y-m-d H:i:s') . "\n";
-$marker .= "Status: ACTIVE\n";
-$marker .= "Server: " . gethostname() . "\n";
-$marker .= "PHP Version: " . PHP_VERSION . "\n\n";
-$marker .= "FITUR:\n";
-$marker .= "- Horror protection dengan matrix effect\n";
-$marker .= "- Countdown 10 detik\n";
-$marker .= "- Device blocking permanent\n";
-$marker .= "- Settings menu dibatasi\n";
-$marker .= "- Log semua percobaan\n\n";
-$marker .= "⚠️ HANYA ADMIN ID 1 YANG BISA AKSES SEMUA FITUR!\n";
-$marker .= "========================================\n";
+echo -e "\n${PURPLE}${BOLD}[BACKUP FILES]${NC}"
+echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}Location Controller:${NC} $BACKUP_PATH"
+echo -e "${YELLOW}Settings View:${NC} $SETTINGS_BACKUP"
+echo -e "${YELLOW}Navigation View:${NC} $NAV_BACKUP"
+echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-mkdir('/root/pterodactyl_protection', 0755, true);
-file_put_contents('/root/pterodactyl_protection/installed.txt', $marker);
-printMsg("  ✓ Membuat marker instalasi", 'success');
-
-// =====================================================
-// SELESAI
-// =====================================================
-printMsg("\n" . str_repeat("=", 50), 'success');
-printMsg("  ✅ INSTALASI SELESAI! SUKSES! ✅", 'success');
-printMsg(str_repeat("=", 50), 'success');
-
-printMsg("\n📋 INFORMASI PENTING:", 'info');
-printMsg("  • Super Admin (ID 1): Akses FULL", 'info');
-printMsg("  • Admin Lain: Hanya Users & Servers", 'info');
-printMsg("  • Settings: Dibatasi untuk admin non-ID 1", 'info');
-printMsg("  • Horror page: Aktif untuk akses tidak sah", 'info');
-
-printMsg("\n🔍 CARA CEK ID ADMIN:", 'warning');
-printMsg("  mysql -u root -p -e 'SELECT id, username, email FROM pterodactyl.users WHERE root_admin = 1;'", 'info');
-
-printMsg("\n📁 LOKASI FILE:", 'info');
-printMsg("  • Horror Controller: app/Http/Controllers/HorrorController.php", 'info');
-printMsg("  • Admin Middleware: app/Http/Middleware/AdminMiddleware.php", 'info');
-printMsg("  • Settings Controller: app/Http/Controllers/Admin/SettingsController.php", 'info');
-printMsg("  • Horror View: resources/views/horror/show.blade.php", 'info');
-printMsg("  • Log: storage/logs/horror.log", 'info');
-
-printMsg("\n🔥 TESTING:", 'success');
-printMsg("  Login dengan admin NON-ID 1 dan coba akses menu settings!", 'success');
-printMsg("\n" . str_repeat("=", 50) . "\n", 'success');
-
-exit(0);
-?>
+echo -e "\n${BLINK}${RED}${BOLD}⚠️  SYSTEM LOCKED - MASTER KEY REQUIRED FOR FULL ACCESS  ⚠️${NC}\n"
