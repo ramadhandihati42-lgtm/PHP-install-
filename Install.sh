@@ -51,11 +51,6 @@ function isMainAdmin() {
     return isset($_SESSION['user_id']) && $_SESSION['user_id'] == 1;
 }
 
-// Fungsi untuk mengecek apakah user adalah admin (termasuk admin utama)
-function isAdmin() {
-    return isset($_SESSION['user_id']) && $_SESSION['role'] === 'admin';
-}
-
 // Handle Login
 if (isset($_POST['login'])) {
     $username = $_POST['username'] ?? '';
@@ -99,7 +94,7 @@ if (isMainAdmin() && isset($_POST['add_user'])) {
 // Handle Hapus User (hanya admin utama ID 1)
 if (isMainAdmin() && isset($_GET['delete_user'])) {
     $id = $_GET['delete_user'];
-    if ($id != 1) { // Jangan hapus admin utama
+    if ($id != 1) {
         $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
         $stmt->execute([$id]);
     }
@@ -115,7 +110,6 @@ if (isMainAdmin() && isset($_POST['edit_user'])) {
     
     $stmt = $pdo->prepare("UPDATE users SET username = ?, role = ? WHERE id = ?");
     $stmt->execute([$username, $role, $id]);
-    $success = "User berhasil diupdate!";
     
     if (!empty($_POST['new_password'])) {
         $password = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
@@ -127,19 +121,18 @@ if (isMainAdmin() && isset($_POST['edit_user'])) {
     exit;
 }
 
-// Handle Tambah Server (semua user yang login bisa)
+// Handle Tambah Server
 if (isLoggedIn() && isset($_POST['add_server'])) {
     $name = $_POST['name'] ?? '';
     $ip_address = $_POST['ip_address'] ?? '';
     
     $stmt = $pdo->prepare("INSERT INTO servers (name, ip_address) VALUES (?, ?)");
     $stmt->execute([$name, $ip_address]);
-    $success = "Server berhasil ditambahkan!";
     header('Location: ' . $_SERVER['PHP_SELF'] . '?page=servers');
     exit;
 }
 
-// Handle Hapus Server (semua user yang login bisa)
+// Handle Hapus Server
 if (isLoggedIn() && isset($_GET['delete_server'])) {
     $stmt = $pdo->prepare("DELETE FROM servers WHERE id = ?");
     $stmt->execute([$_GET['delete_server']]);
@@ -147,7 +140,7 @@ if (isLoggedIn() && isset($_GET['delete_server'])) {
     exit;
 }
 
-// Handle Edit Server (semua user yang login bisa)
+// Handle Edit Server
 if (isLoggedIn() && isset($_POST['edit_server'])) {
     $id = $_POST['id'];
     $name = $_POST['name'];
@@ -156,7 +149,6 @@ if (isLoggedIn() && isset($_POST['edit_server'])) {
     
     $stmt = $pdo->prepare("UPDATE servers SET name = ?, ip_address = ?, status = ? WHERE id = ?");
     $stmt->execute([$name, $ip_address, $status, $id]);
-    $success = "Server berhasil diupdate!";
     header('Location: ' . $_SERVER['PHP_SELF'] . '?page=servers');
     exit;
 }
@@ -179,9 +171,8 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: Arial, sans-serif;
             background: #f5f5f5;
-            min-height: 100vh;
         }
         
         .login-container {
@@ -197,14 +188,13 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             padding: 40px;
             border-radius: 10px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            width: 100%;
-            max-width: 400px;
+            width: 400px;
         }
         
         .login-box h2 {
             text-align: center;
-            color: #333;
             margin-bottom: 30px;
+            color: #333;
         }
         
         .form-group {
@@ -215,57 +205,75 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             display: block;
             margin-bottom: 5px;
             color: #555;
-            font-weight: 500;
         }
         
-        .form-group input, .form-group select, .form-group textarea {
+        .form-group input, .form-group select {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e1e1e1;
-            border-radius: 6px;
-            font-size: 16px;
-            transition: border-color 0.3s;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
         }
         
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-            outline: none;
-            border-color: #667eea;
+        .btn-login, .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
         }
         
         .btn-login {
             width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #667eea;
             color: white;
-            border: none;
-            border-radius: 6px;
             font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.3s;
         }
         
         .btn-login:hover {
-            transform: translateY(-2px);
+            background: #5a67d8;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
         }
         
         .error {
-            background: #fee;
-            color: #c33;
+            background: #f8d7da;
+            color: #721c24;
             padding: 10px;
-            border-radius: 6px;
+            border-radius: 5px;
             margin-bottom: 20px;
             text-align: center;
         }
         
         .navbar {
             background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             padding: 15px 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
         }
         
         .nav-brand {
@@ -288,8 +296,7 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             text-decoration: none;
             color: #555;
             padding: 8px 16px;
-            border-radius: 6px;
-            transition: all 0.3s;
+            border-radius: 5px;
         }
         
         .nav-menu a:hover, .nav-menu a.active {
@@ -302,9 +309,6 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             padding: 8px 16px;
             border-radius: 20px;
             color: #333;
-            display: flex;
-            align-items: center;
-            gap: 5px;
         }
         
         .nav-menu .logout {
@@ -319,7 +323,7 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
         
         .container {
             max-width: 1200px;
-            margin: 0 auto;
+            margin: 20px auto;
             padding: 0 20px;
         }
         
@@ -328,80 +332,13 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             border-radius: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             padding: 30px;
-            margin-bottom: 30px;
         }
         
         .content-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
-        }
-        
-        .content-header h1 {
-            color: #333;
-            font-size: 24px;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #5a67d8;
-        }
-        
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-        
-        .btn-success:hover {
-            background: #218838;
-        }
-        
-        .btn-warning {
-            background: #ffc107;
-            color: #333;
-        }
-        
-        .btn-warning:hover {
-            background: #e0a800;
-        }
-        
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-        
-        .table-container {
-            overflow-x: auto;
+            margin-bottom: 20px;
         }
         
         table {
@@ -413,8 +350,6 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             background: #f8f9fa;
             padding: 12px;
             text-align: left;
-            font-weight: 600;
-            color: #555;
             border-bottom: 2px solid #dee2e6;
         }
         
@@ -427,8 +362,6 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 12px;
-            font-weight: 500;
-            display: inline-block;
         }
         
         .status-active {
@@ -441,52 +374,29 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             color: #721c24;
         }
         
-        .role-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-            display: inline-block;
-        }
-        
-        .role-admin {
-            background: #cce5ff;
-            color: #004085;
-        }
-        
-        .role-user {
-            background: #e2e3e5;
-            color: #383d41;
-        }
-        
         .main-admin-badge {
             background: #dc3545;
             color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
             margin-left: 5px;
         }
         
         .admin-badge {
             background: #ffc107;
             color: #333;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
             margin-left: 5px;
         }
         
         .modal {
             display: none;
             position: fixed;
-            z-index: 1000;
-            left: 0;
             top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             background: rgba(0,0,0,0.5);
@@ -502,15 +412,7 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             background: white;
             padding: 30px;
             border-radius: 10px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        
-        .modal-content h2 {
-            margin-bottom: 20px;
-            color: #333;
+            width: 500px;
         }
         
         .modal-buttons {
@@ -520,94 +422,16 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             margin-top: 20px;
         }
         
-        .alert {
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-        }
-        
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
         .system-info {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 15px 20px;
+            padding: 15px;
             border-radius: 10px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
         
         .system-info a {
             color: white;
-            text-decoration: underline;
-        }
-        
-        .dashboard-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-        }
-        
-        .stat-card h3 {
-            font-size: 16px;
-            margin-bottom: 10px;
-            opacity: 0.9;
-        }
-        
-        .stat-card p {
-            font-size: 36px;
-            font-weight: bold;
-        }
-        
-        .menu-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .menu-item {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-            transition: transform 0.3s;
-        }
-        
-        .menu-item:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .menu-item h3 {
-            margin-bottom: 10px;
-            color: #333;
-        }
-        
-        .menu-item p {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .action-buttons {
-            display: flex;
-            gap: 5px;
-        }
-        
-        .btn-small {
-            padding: 5px 10px;
-            font-size: 12px;
         }
         
         .welcome-message {
@@ -625,11 +449,69 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             margin-bottom: 20px;
             border-left: 4px solid #17a2b8;
         }
+        
+        .dashboard-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .stat-card h3 {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .stat-card p {
+            font-size: 36px;
+            font-weight: bold;
+        }
+        
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .menu-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .menu-item h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .menu-item p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
     <?php if (!isLoggedIn()): ?>
-        <!-- Halaman Login -->
         <div class="login-container">
             <div class="login-box">
                 <h2>🔐 Admin Panel Login</h2>
@@ -647,38 +529,24 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
                     </div>
                     <button type="submit" name="login" class="btn-login">Login</button>
                 </form>
-                <div style="text-align: center; margin-top: 20px; color: #666; font-size: 14px;">
-                    <p>Default Admin: admin / admin123</p>
-                </div>
             </div>
         </div>
     <?php else: ?>
-        <!-- Navigation Bar -->
         <div class="navbar">
-            <div class="nav-brand">
-                Pterodactyl <span>Admin</span>
-            </div>
+            <div class="nav-brand">Pterodactyl <span>Admin</span></div>
             <div class="nav-menu">
                 <?php if (isMainAdmin()): ?>
                     <a href="?page=dashboard" class="<?php echo $page == 'dashboard' ? 'active' : ''; ?>">Dashboard</a>
                 <?php endif; ?>
-                
-                <!-- Menu Users selalu tampil untuk semua user -->
                 <a href="?page=users" class="<?php echo $page == 'users' ? 'active' : ''; ?>">Users</a>
-                
-                <!-- Menu Servers selalu tampil untuk semua user -->
                 <a href="?page=servers" class="<?php echo $page == 'servers' ? 'active' : ''; ?>">Servers</a>
-                
                 <?php if (isMainAdmin()): ?>
                     <a href="?page=all" class="<?php echo $page == 'all' ? 'active' : ''; ?>">All Menu</a>
                 <?php endif; ?>
-                
                 <span class="user-info">
                     👤 <?php echo $_SESSION['username']; ?>
                     <?php if (isMainAdmin()): ?>
                         <span class="main-admin-badge">Main Admin</span>
-                    <?php elseif (isAdmin()): ?>
-                        <span class="admin-badge">Admin</span>
                     <?php endif; ?>
                 </span>
                 <a href="?logout=1" class="logout">Logout</a>
@@ -686,52 +554,36 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
         </div>
         
         <div class="container">
-            <!-- System Info -->
             <div class="system-info">
-                <strong>⚠️ System Information:</strong> Your panel is using version 1.12.1 | 
-                <a href="#">Get Help (via GitHub)</a> | 
-                Copyright © 2025
+                <strong>⚠️ System Information:</strong> Panel version 1.12.1 | 
+                <a href="#">Get Help</a> | Copyright © 2025
             </div>
             
-            <!-- Welcome Message berdasarkan role -->
             <div class="welcome-message">
                 <strong>Selamat datang, <?php echo $_SESSION['username']; ?>!</strong><br>
                 <?php if (isMainAdmin()): ?>
-                    Anda login sebagai <strong>Admin Utama (ID: 1)</strong> dengan akses penuh ke semua fitur.
-                <?php elseif (isAdmin()): ?>
-                    Anda login sebagai <strong>Admin (ID: <?php echo $_SESSION['user_id']; ?>)</strong> dengan akses terbatas.
+                    Anda login sebagai <strong>Admin Utama (ID: 1)</strong> dengan akses penuh.
                 <?php else: ?>
                     Anda login sebagai <strong>User (ID: <?php echo $_SESSION['user_id']; ?>)</strong> dengan akses terbatas.
                 <?php endif; ?>
             </div>
             
-            <!-- Info Box untuk non-main admin -->
             <?php if (!isMainAdmin()): ?>
             <div class="info-box">
-                <strong>ℹ️ Informasi Akses:</strong> Anda hanya dapat mengakses menu Users (view only) dan Servers (full access).
-                <?php if (isAdmin() && !isMainAdmin()): ?>
-                <br><small>Sebagai admin (bukan main admin), Anda hanya bisa melihat daftar users tanpa bisa mengedit/menghapus.</small>
-                <?php endif; ?>
+                <strong>ℹ️ Informasi Akses:</strong> Anda hanya dapat melihat daftar users (tanpa edit/hapus) dan mengelola servers.
             </div>
             <?php endif; ?>
             
-            <!-- Success Message -->
-            <?php if (isset($success)): ?>
-                <div class="alert alert-success"><?php echo $success; ?></div>
-            <?php endif; ?>
-            
-            <!-- Dashboard Page (Hanya untuk Main Admin ID 1) -->
             <?php if ($page == 'dashboard' && isMainAdmin()): ?>
                 <div class="content-card">
                     <div class="content-header">
-                        <h1>📊 Dashboard Overview</h1>
+                        <h1>📊 Dashboard</h1>
                     </div>
                     
                     <?php
                     $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
                     $totalServers = $pdo->query("SELECT COUNT(*) FROM servers")->fetchColumn();
                     $totalAdmins = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
-                    $totalMainAdmin = $pdo->query("SELECT COUNT(*) FROM users WHERE id = 1")->fetchColumn();
                     $activeServers = $pdo->query("SELECT COUNT(*) FROM servers WHERE status = 'active'")->fetchColumn();
                     ?>
                     
@@ -753,28 +605,9 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
                             <p><?php echo $activeServers; ?></p>
                         </div>
                     </div>
-                    
-                    <div style="margin-top: 20px;">
-                        <h3>System Information</h3>
-                        <table style="width: 100%;">
-                            <tr>
-                                <td>Main Admin (ID 1):</td>
-                                <td><strong><?php echo $totalMainAdmin > 0 ? 'Active' : 'Not Found'; ?></strong></td>
-                            </tr>
-                            <tr>
-                                <td>PHP Version:</td>
-                                <td><strong><?php echo phpversion(); ?></strong></td>
-                            </tr>
-                            <tr>
-                                <td>Database:</td>
-                                <td><strong>MySQL</strong></td>
-                            </tr>
-                        </table>
-                    </div>
                 </div>
             <?php endif; ?>
             
-            <!-- Users Page - Dengan akses berbeda berdasarkan role -->
             <?php if ($page == 'users'): ?>
                 <div class="content-card">
                     <div class="content-header">
@@ -784,65 +617,54 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
                         <?php endif; ?>
                     </div>
                     
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Username</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                    <th>Created At</th>
-                                    <?php if (isMainAdmin()): ?>
-                                        <th>Actions</th>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <?php if (isMainAdmin()): ?>
+                                    <th>Actions</th>
+                                <?php endif; ?>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $users = $pdo->query("SELECT * FROM users ORDER BY id DESC");
+                            while($user = $users->fetch()):
+                            ?>
+                            <tr>
+                                <td><?php echo $user['id']; ?></td>
+                                <td>
+                                    <?php echo $user['username']; ?>
+                                    <?php if ($user['id'] == 1): ?>
+                                        <span class="main-admin-badge">Main Admin</span>
+                                    <?php elseif ($user['role'] == 'admin'): ?>
+                                        <span class="admin-badge">Admin</span>
                                     <?php endif; ?>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php
-                                $users = $pdo->query("SELECT * FROM users ORDER BY id DESC");
-                                while($user = $users->fetch()):
-                                ?>
-                                <tr>
-                                    <td><?php echo $user['id']; ?></td>
+                                </td>
+                                <td><?php echo ucfirst($user['role']); ?></td>
+                                <td><span class="status-badge status-active">Active</span></td>
+                                <td><?php echo $user['created_at']; ?></td>
+                                <?php if (isMainAdmin()): ?>
                                     <td>
-                                        <?php echo htmlspecialchars($user['username']); ?>
-                                        <?php if ($user['id'] == 1): ?>
-                                            <span class="main-admin-badge">Main Admin</span>
-                                        <?php elseif ($user['role'] == 'admin'): ?>
-                                            <span class="admin-badge">Admin</span>
+                                        <?php if ($user['id'] != 1): ?>
+                                            <button class="btn btn-warning btn-small" onclick="editUser(<?php echo $user['id']; ?>, '<?php echo $user['username']; ?>', '<?php echo $user['role']; ?>')">Edit</button>
+                                            <a href="?page=users&delete_user=<?php echo $user['id']; ?>" class="btn btn-danger btn-small" onclick="return confirm('Hapus user?')">Delete</a>
+                                        <?php else: ?>
+                                            <span style="color: #999;">No actions</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td>
-                                        <span class="role-badge role-<?php echo $user['role']; ?>">
-                                            <?php echo ucfirst($user['role']); ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="status-badge status-active">
-                                            Active
-                                        </span>
-                                    </td>
-                                    <td><?php echo $user['created_at']; ?></td>
-                                    <?php if (isMainAdmin()): ?>
-                                        <td class="action-buttons">
-                                            <?php if ($user['id'] != 1): ?>
-                                                <button class="btn btn-warning btn-small" onclick="editUser(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['username']); ?>', '<?php echo $user['role']; ?>')">Edit</button>
-                                                <a href="?page=users&delete_user=<?php echo $user['id']; ?>" class="btn btn-danger btn-small" onclick="return confirm('Hapus user ini?')">Delete</a>
-                                            <?php else: ?>
-                                                <span style="color: #999; font-style: italic;">Main Admin - No actions</span>
-                                            <?php endif; ?>
-                                        </td>
-                                    <?php endif; ?>
-                                </tr>
-                                <?php endwhile; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                                <?php endif; ?>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
                 </div>
             <?php endif; ?>
             
-            <!-- Servers Page - Semua user bisa akses penuh -->
             <?php if ($page == 'servers'): ?>
                 <div class="content-card">
                     <div class="content-header">
@@ -850,131 +672,108 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
                         <button class="btn btn-success" onclick="openModal('addServerModal')">+ Add Server</button>
                     </div>
                     
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Name</th>
-                                    <th>IP Address</th>
-                                    <th>Status</th>
-                                    <th>Created At</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php
-                                $servers = $pdo->query("SELECT * FROM servers ORDER BY id DESC");
-                                while($server = $servers->fetch()):
-                                ?>
-                                <tr>
-                                    <td><?php echo $server['id']; ?></td>
-                                    <td><?php echo htmlspecialchars($server['name']); ?></td>
-                                    <td><?php echo $server['ip_address']; ?></td>
-                                    <td>
-                                        <span class="status-badge status-<?php echo $server['status']; ?>">
-                                            <?php echo ucfirst($server['status']); ?>
-                                        </span>
-                                    </td>
-                                    <td><?php echo $server['created_at']; ?></td>
-                                    <td class="action-buttons">
-                                        <button class="btn btn-warning btn-small" onclick="editServer(<?php echo $server['id']; ?>, '<?php echo htmlspecialchars($server['name']); ?>', '<?php echo $server['ip_address']; ?>', '<?php echo $server['status']; ?>')">Edit</button>
-                                        <a href="?page=servers&delete_server=<?php echo $server['id']; ?>" class="btn btn-danger btn-small" onclick="return confirm('Hapus server ini?')">Delete</a>
-                                    </td>
-                                </tr>
-                                <?php endwhile; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>IP Address</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $servers = $pdo->query("SELECT * FROM servers ORDER BY id DESC");
+                            while($server = $servers->fetch()):
+                            ?>
+                            <tr>
+                                <td><?php echo $server['id']; ?></td>
+                                <td><?php echo $server['name']; ?></td>
+                                <td><?php echo $server['ip_address']; ?></td>
+                                <td>
+                                    <span class="status-badge status-<?php echo $server['status']; ?>">
+                                        <?php echo ucfirst($server['status']); ?>
+                                    </span>
+                                </td>
+                                <td><?php echo $server['created_at']; ?></td>
+                                <td>
+                                    <button class="btn btn-warning btn-small" onclick="editServer(<?php echo $server['id']; ?>, '<?php echo $server['name']; ?>', '<?php echo $server['ip_address']; ?>', '<?php echo $server['status']; ?>')">Edit</button>
+                                    <a href="?page=servers&delete_server=<?php echo $server['id']; ?>" class="btn btn-danger btn-small" onclick="return confirm('Hapus server?')">Delete</a>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
                 </div>
             <?php endif; ?>
             
-            <!-- All Menu (Khusus Main Admin ID 1) -->
             <?php if ($page == 'all' && isMainAdmin()): ?>
                 <div class="content-card">
                     <div class="content-header">
                         <h1>📋 Complete Administration</h1>
-                        <span class="main-admin-badge">Main Admin Only</span>
                     </div>
                     
-                    <h2 style="margin: 20px 0;">Basic Administration</h2>
+                    <h3>Basic Administration</h3>
                     <div class="menu-grid">
                         <div class="menu-item">
                             <h3>📊 Overview</h3>
-                            <p>System statistics and monitoring</p>
-                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Overview - Hanya untuk Main Admin')">View</button>
+                            <p>System statistics</p>
+                            <button class="btn btn-primary btn-small" onclick="alert('Overview - Main Admin only')">View</button>
                         </div>
                         <div class="menu-item">
                             <h3>⚙️ Settings</h3>
-                            <p>Configure system settings</p>
-                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Settings - Hanya untuk Main Admin')">View</button>
+                            <p>System settings</p>
+                            <button class="btn btn-primary btn-small" onclick="alert('Settings - Main Admin only')">View</button>
                         </div>
                         <div class="menu-item">
-                            <h3>🔑 Application API</h3>
-                            <p>Manage API access</p>
-                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur API - Hanya untuk Main Admin')">View</button>
+                            <h3>🔑 API</h3>
+                            <p>API access</p>
+                            <button class="btn btn-primary btn-small" onclick="alert('API - Main Admin only')">View</button>
                         </div>
                     </div>
                     
-                    <h2 style="margin: 20px 0;">Management</h2>
+                    <h3>Management</h3>
                     <div class="menu-grid">
                         <div class="menu-item">
                             <h3>🗄️ Databases</h3>
                             <p>Manage databases</p>
-                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Databases - Hanya untuk Main Admin')">View</button>
+                            <button class="btn btn-primary btn-small" onclick="alert('Databases - Main Admin only')">View</button>
                         </div>
                         <div class="menu-item">
                             <h3>📍 Locations</h3>
                             <p>Server locations</p>
-                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Locations - Hanya untuk Main Admin')">View</button>
+                            <button class="btn btn-primary btn-small" onclick="alert('Locations - Main Admin only')">View</button>
                         </div>
                         <div class="menu-item">
                             <h3>🌐 Nodes</h3>
                             <p>Manage nodes</p>
-                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Nodes - Hanya untuk Main Admin')">View</button>
-                        </div>
-                        <div class="menu-item">
-                            <h3>🖥️ Servers</h3>
-                            <p>Server management</p>
-                            <a href="?page=servers" class="btn btn-primary btn-small" style="margin-top: 10px;">View</a>
-                        </div>
-                        <div class="menu-item">
-                            <h3>👥 Users</h3>
-                            <p>User management</p>
-                            <a href="?page=users" class="btn btn-primary btn-small" style="margin-top: 10px;">View</a>
+                            <button class="btn btn-primary btn-small" onclick="alert('Nodes - Main Admin only')">View</button>
                         </div>
                     </div>
                     
-                    <h2 style="margin: 20px 0;">Service Management</h2>
+                    <h3>Service Management</h3>
                     <div class="menu-grid">
                         <div class="menu-item">
                             <h3>💾 Mounts</h3>
                             <p>Manage mounts</p>
-                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Mounts - Hanya untuk Main Admin')">View</button>
+                            <button class="btn btn-primary btn-small" onclick="alert('Mounts - Main Admin only')">View</button>
                         </div>
                         <div class="menu-item">
                             <h3>🏠 Nests</h3>
                             <p>Manage nests</p>
-                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Nests - Hanya untuk Main Admin')">View</button>
+                            <button class="btn btn-primary btn-small" onclick="alert('Nests - Main Admin only')">View</button>
                         </div>
-                    </div>
-                    
-                    <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
-                        <h3>Main Admin Information</h3>
-                        <p><strong>ID:</strong> 1</p>
-                        <p><strong>Username:</strong> admin</p>
-                        <p><strong>Role:</strong> Main Admin (Full Access)</p>
-                        <p><strong>Status:</strong> <span class="status-badge status-active">Active</span></p>
                     </div>
                 </div>
             <?php endif; ?>
         </div>
         
-        <!-- Modal Add User (Khusus Main Admin ID 1) -->
         <?php if (isMainAdmin()): ?>
         <div id="addUserModal" class="modal">
             <div class="modal-content">
-                <h2>Tambah User Baru</h2>
+                <h2>Tambah User</h2>
                 <form method="POST">
                     <div class="form-group">
                         <label>Username</label>
@@ -999,7 +798,6 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             </div>
         </div>
         
-        <!-- Modal Edit User (Khusus Main Admin ID 1) -->
         <div id="editUserModal" class="modal">
             <div class="modal-content">
                 <h2>Edit User</h2>
@@ -1010,8 +808,8 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
                         <input type="text" name="username" id="edit_username" required>
                     </div>
                     <div class="form-group">
-                        <label>Password Baru (kosongkan jika tidak ingin mengubah)</label>
-                        <input type="password" name="new_password">
+                        <label>Password Baru</label>
+                        <input type="password" name="new_password" placeholder="Kosongkan jika tidak ingin mengubah">
                     </div>
                     <div class="form-group">
                         <label>Role</label>
@@ -1029,10 +827,9 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
         </div>
         <?php endif; ?>
         
-        <!-- Modal Add Server (Semua user bisa akses) -->
         <div id="addServerModal" class="modal">
             <div class="modal-content">
-                <h2>Tambah Server Baru</h2>
+                <h2>Tambah Server</h2>
                 <form method="POST">
                     <div class="form-group">
                         <label>Nama Server</label>
@@ -1050,7 +847,6 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
             </div>
         </div>
         
-        <!-- Modal Edit Server (Semua user bisa akses) -->
         <div id="editServerModal" class="modal">
             <div class="modal-content">
                 <h2>Edit Server</h2>
@@ -1080,12 +876,12 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
         </div>
         
         <script>
-            function openModal(modalId) {
-                document.getElementById(modalId).classList.add('active');
+            function openModal(id) {
+                document.getElementById(id).classList.add('active');
             }
             
-            function closeModal(modalId) {
-                document.getElementById(modalId).classList.remove('active');
+            function closeModal(id) {
+                document.getElementById(id).classList.remove('active');
             }
             
             function editUser(id, username, role) {
@@ -1103,7 +899,6 @@ $page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
                 openModal('editServerModal');
             }
             
-            // Close modal when clicking outside
             window.onclick = function(event) {
                 if (event.target.classList.contains('modal')) {
                     event.target.classList.remove('active');
