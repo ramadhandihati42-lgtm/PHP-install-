@@ -1,758 +1,1115 @@
-#!/bin/bash
-# ============================================================================
-# FILE 14: install_access_control.sh - Script instalasi lengkap
-# ============================================================================
-
-#!/bin/bash
-
-# Warna untuk output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-NC='\033[0m'
-BOLD='\033[1m'
-
-# Direktori Pterodactyl
-PTERO_PATH="/var/www/pterodactyl"
-TIMESTAMP=$(date -u +"%Y-%m-%d-%H-%M-%S")
-
-clear
-echo -e "${CYAN}${BOLD}"
-echo "╔══════════════════════════════════════════════════════════════════╗"
-echo "║         PTERODACTYL ACCESS CONTROL INSTALLATION v1.0            ║"
-echo "║              Master Admin (ID 1) Exclusive Access               ║"
-echo "╚══════════════════════════════════════════════════════════════════╝"
-echo -e "${NC}"
-
-# Fungsi backup
-backup_file() {
-    if [ -f "$1" ]; then
-        cp "$1" "$1.bak_${TIMESTAMP}"
-        echo -e "${GREEN}[✓]${NC} Backup created: $1.bak_${TIMESTAMP}"
-    fi
-}
-
-# Buat direktori jika belum ada
-mkdir -p "$PTERO_PATH/app/Http/Middleware"
-mkdir -p "$PTERO_PATH/app/Helpers"
-mkdir -p "$PTERO_PATH/app/Http/Controllers/Admin"
-mkdir -p "$PTERO_PATH/resources/views/layouts"
-mkdir -p "$PTERO_PATH/resources/views/admin/settings"
-
-echo -e "\n${YELLOW}[1/7]${NC} Installing Middleware..."
-# Install AdminAccessMiddleware
-backup_file "$PTERO_PATH/app/Http/Middleware/AdminAccessMiddleware.php"
-cat > "$PTERO_PATH/app/Http/Middleware/AdminAccessMiddleware.php" << 'EOF'
 <?php
+session_start();
 
-namespace Pterodactyl\Http\Middleware;
+// Konfigurasi Database
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'admin_panel');
+define('DB_USER', 'root');
+define('DB_PASS', '');
 
-use Closure;
-use Illuminate\Support\Facades\Auth;
-
-class AdminAccessMiddleware
-{
-    public function handle($request, Closure $next, ...$menus)
-    {
-        $user = Auth::user();
-        
-        if (!$user) {
-            return redirect()->route('auth.login');
-        }
-        
-        $isAdmin = $user->root_admin || $user->id === 1;
-        
-        if (!$isAdmin) {
-            abort(403, 'Unauthorized access. Admin privileges required.');
-        }
-        
-        if ($user->id === 1) {
-            return $next($request);
-        }
-        
-        if (empty($menus)) {
-            abort(403, 'Access denied. Insufficient privileges.');
-        }
-        
-        $allowedMenus = ['dashboard', 'users', 'servers', 'account'];
-        
-        foreach ($menus as $menu) {
-            if (in_array($menu, $allowedMenus)) {
-                return $next($request);
-            }
-        }
-        
-        abort(403, 'This admin feature is restricted to master administrator only. Contact @kaaahost1 for full access.');
-    }
-}
-EOF
-echo -e "${GREEN}[✓]${NC} AdminAccessMiddleware installed"
-
-# Install MasterAdminMiddleware
-cat > "$PTERO_PATH/app/Http/Middleware/MasterAdminMiddleware.php" << 'EOF'
-<?php
-
-namespace Pterodactyl\Http\Middleware;
-
-use Closure;
-use Illuminate\Support\Facades\Auth;
-
-class MasterAdminMiddleware
-{
-    public function handle($request, Closure $next)
-    {
-        $user = Auth::user();
-        
-        if (!$user) {
-            return redirect()->route('auth.login');
-        }
-        
-        if ($user->id !== 1) {
-            abort(403, '🔐 MASTER ADMIN ACCESS REQUIRED. This area is restricted to Master Administrator only. Contact @kaaahost1 for access.');
-        }
-        
-        return $next($request);
-    }
-}
-EOF
-echo -e "${GREEN}[✓]${NC} MasterAdminMiddleware installed"
-
-echo -e "\n${YELLOW}[2/7]${NC} Installing Helper..."
-# Install AdminHelper
-mkdir -p "$PTERO_PATH/app/Helpers"
-cat > "$PTERO_PATH/app/Helpers/AdminHelper.php" << 'EOF'
-<?php
-
-namespace Pterodactyl\Helpers;
-
-use Illuminate\Support\Facades\Auth;
-
-class AdminHelper
-{
-    public static function isMasterAdmin()
-    {
-        $user = Auth::user();
-        return $user && $user->id === 1;
+// Koneksi Database
+try {
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    
+    // Buat tabel jika belum ada
+    $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'user') DEFAULT 'user',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+    
+    $pdo->exec("CREATE TABLE IF NOT EXISTS servers (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(100) NOT NULL,
+        ip_address VARCHAR(50),
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+    
+    // Insert admin default jika belum ada
+    $checkAdmin = $pdo->query("SELECT COUNT(*) FROM users WHERE id = 1");
+    if ($checkAdmin->fetchColumn() == 0) {
+        $hashedPassword = password_hash('admin123', PASSWORD_DEFAULT);
+        $pdo->exec("INSERT INTO users (id, username, password, role) VALUES (1, 'admin', '$hashedPassword', 'admin')");
     }
     
-    public static function isAdmin()
-    {
-        $user = Auth::user();
-        return $user && ($user->root_admin || $user->id === 1);
-    }
+} catch(PDOException $e) {
+    die("Koneksi database gagal: " . $e->getMessage());
+}
+
+// Fungsi Authentication
+function isLoggedIn() {
+    return isset($_SESSION['user_id']);
+}
+
+// Fungsi untuk mengecek apakah user adalah admin utama (ID 1)
+function isMainAdmin() {
+    return isset($_SESSION['user_id']) && $_SESSION['user_id'] == 1;
+}
+
+// Fungsi untuk mengecek apakah user adalah admin (termasuk admin utama)
+function isAdmin() {
+    return isset($_SESSION['user_id']) && $_SESSION['role'] === 'admin';
+}
+
+// Handle Login
+if (isset($_POST['login'])) {
+    $username = $_POST['username'] ?? '';
+    $password = $_POST['password'] ?? '';
     
-    public static function canAccessMenu($menu)
-    {
-        if (self::isMasterAdmin()) {
-            return true;
-        }
-        
-        $allowedMenus = ['dashboard', 'users', 'servers', 'account'];
-        return in_array($menu, $allowedMenus);
-    }
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
+    $stmt->execute([$username]);
+    $user = $stmt->fetch();
     
-    public static function getAllowedMenus()
-    {
-        if (self::isMasterAdmin()) {
-            return [
-                'dashboard' => true, 'locations' => true, 'users' => true,
-                'servers' => true, 'nodes' => true, 'allocations' => true,
-                'nests' => true, 'settings' => true, 'api' => true,
-                'database' => true, 'mounts' => true
-            ];
-        }
-        
-        return [
-            'dashboard' => true, 'locations' => false, 'users' => true,
-            'servers' => true, 'nodes' => false, 'allocations' => false,
-            'nests' => false, 'settings' => false, 'api' => false,
-            'database' => false, 'mounts' => false
-        ];
-    }
-    
-    public static function getMasterAdminContact()
-    {
-        return '@kaaahost1';
-    }
-    
-    public static function getRestrictedMessage()
-    {
-        return '🔐 Limited Access Mode - Contact Master Admin ' . self::getMasterAdminContact() . ' for full access.';
+    if ($user && password_verify($password, $user['password'])) {
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'];
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit;
+    } else {
+        $error = "Username atau password salah!";
     }
 }
-EOF
-echo -e "${GREEN}[✓]${NC} AdminHelper installed"
 
-echo -e "\n${YELLOW}[3/7]${NC} Installing Controllers..."
-
-# Install LocationController
-backup_file "$PTERO_PATH/app/Http/Controllers/Admin/LocationController.php"
-cat > "$PTERO_PATH/app/Http/Controllers/Admin/LocationController.php" << 'EOF'
-<?php
-
-namespace Pterodactyl\Http\Controllers\Admin;
-
-use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
-use Pterodactyl\Models\Location;
-use Prologue\Alerts\AlertsMessageBag;
-use Illuminate\View\Factory as ViewFactory;
-use Pterodactyl\Exceptions\DisplayException;
-use Pterodactyl\Http\Controllers\Controller;
-use Pterodactyl\Http\Requests\Admin\LocationFormRequest;
-use Pterodactyl\Services\Locations\LocationUpdateService;
-use Pterodactyl\Services\Locations\LocationCreationService;
-use Pterodactyl\Services\Locations\LocationDeletionService;
-use Pterodactyl\Contracts\Repository\LocationRepositoryInterface;
-
-class LocationController extends Controller
-{
-    public function __construct(
-        protected AlertsMessageBag $alert,
-        protected LocationCreationService $creationService,
-        protected LocationDeletionService $deletionService,
-        protected LocationRepositoryInterface $repository,
-        protected LocationUpdateService $updateService,
-        protected ViewFactory $view
-    ) {
-        $this->middleware(function ($request, $next) {
-            $user = Auth::user();
-            if (!$user || $user->id !== 1) {
-                abort(403, '🔐 ACCESS DENIED - LOCATION MANAGEMENT IS RESTRICTED TO MASTER ADMIN ONLY. Contact @kaaahost1 for access.');
-            }
-            return $next($request);
-        });
-    }
-
-    public function index(): View
-    {
-        return $this->view->make('admin.locations.index', [
-            'locations' => $this->repository->getAllWithDetails(),
-        ]);
-    }
-
-    public function view(int $id): View
-    {
-        return $this->view->make('admin.locations.view', [
-            'location' => $this->repository->getWithNodes($id),
-        ]);
-    }
-
-    public function create(LocationFormRequest $request): RedirectResponse
-    {
-        $location = $this->creationService->handle($request->normalize());
-        $this->alert->success('Location was created successfully.')->flash();
-        return redirect()->route('admin.locations.view', $location->id);
-    }
-
-    public function update(LocationFormRequest $request, Location $location): RedirectResponse
-    {
-        if ($request->input('action') === 'delete') {
-            return $this->delete($location);
-        }
-
-        $this->updateService->handle($location->id, $request->normalize());
-        $this->alert->success('Location was updated successfully.')->flash();
-        return redirect()->route('admin.locations.view', $location->id);
-    }
-
-    public function delete(Location $location): RedirectResponse
-    {
-        try {
-            $this->deletionService->handle($location->id);
-            return redirect()->route('admin.locations');
-        } catch (DisplayException $ex) {
-            $this->alert->danger($ex->getMessage())->flash();
-        }
-        return redirect()->route('admin.locations.view', $location->id);
-    }
+// Handle Logout
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
 }
-EOF
-echo -e "${GREEN}[✓]${NC} LocationController installed"
 
-# Install SettingsController
-cat > "$PTERO_PATH/app/Http/Controllers/Admin/SettingsController.php" << 'EOF'
-<?php
-
-namespace Pterodactyl\Http\Controllers\Admin;
-
-use Illuminate\View\View;
-use Illuminate\Http\Request;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
-use Prologue\Alerts\AlertsMessageBag;
-use Pterodactyl\Http\Controllers\Controller;
-
-class SettingsController extends Controller
-{
-    public function __construct(
-        protected AlertsMessageBag $alert
-    ) {
-        $this->middleware(function ($request, $next) {
-            $user = Auth::user();
-            if (!$user || $user->id !== 1) {
-                abort(403, '🔐 SETTINGS ACCESS - DENIED. Only Master Admin (@kaaahost1) can access panel settings.');
-            }
-            return $next($request);
-        });
-    }
-
-    public function index(): View
-    {
-        return view('admin.settings.index');
-    }
-
-    public function update(Request $request): RedirectResponse
-    {
-        $this->alert->success('Settings were updated successfully.')->flash();
-        return redirect()->route('admin.settings');
-    }
-
-    public function mail(): View
-    {
-        return view('admin.settings.mail');
-    }
-
-    public function updateMail(Request $request): RedirectResponse
-    {
-        $this->alert->success('Mail settings were updated successfully.')->flash();
-        return redirect()->route('admin.settings.mail');
-    }
-
-    public function advanced(): View
-    {
-        return view('admin.settings.advanced');
-    }
-
-    public function updateAdvanced(Request $request): RedirectResponse
-    {
-        $this->alert->success('Advanced settings were updated successfully.')->flash();
-        return redirect()->route('admin.settings.advanced');
-    }
+// Handle Tambah User (hanya admin utama ID 1)
+if (isMainAdmin() && isset($_POST['add_user'])) {
+    $username = $_POST['username'] ?? '';
+    $password = password_hash($_POST['password'] ?? '', PASSWORD_DEFAULT);
+    $role = $_POST['role'] ?? 'user';
+    
+    $stmt = $pdo->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
+    $stmt->execute([$username, $password, $role]);
+    $success = "User berhasil ditambahkan!";
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?page=users');
+    exit;
 }
-EOF
-echo -e "${GREEN}[✓]${NC} SettingsController installed"
 
-echo -e "\n${YELLOW}[4/7]${NC} Installing Views..."
+// Handle Hapus User (hanya admin utama ID 1)
+if (isMainAdmin() && isset($_GET['delete_user'])) {
+    $id = $_GET['delete_user'];
+    if ($id != 1) { // Jangan hapus admin utama
+        $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
+        $stmt->execute([$id]);
+    }
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?page=users');
+    exit;
+}
 
-# Install admin layout
-backup_file "$PTERO_PATH/resources/views/layouts/admin.blade.php"
-cat > "$PTERO_PATH/resources/views/layouts/admin.blade.php" << 'EOF'
+// Handle Edit User (hanya admin utama ID 1)
+if (isMainAdmin() && isset($_POST['edit_user'])) {
+    $id = $_POST['id'];
+    $username = $_POST['username'];
+    $role = $_POST['role'];
+    
+    $stmt = $pdo->prepare("UPDATE users SET username = ?, role = ? WHERE id = ?");
+    $stmt->execute([$username, $role, $id]);
+    $success = "User berhasil diupdate!";
+    
+    if (!empty($_POST['new_password'])) {
+        $password = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
+        $stmt->execute([$password, $id]);
+    }
+    
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?page=users');
+    exit;
+}
+
+// Handle Tambah Server (semua user yang login bisa)
+if (isLoggedIn() && isset($_POST['add_server'])) {
+    $name = $_POST['name'] ?? '';
+    $ip_address = $_POST['ip_address'] ?? '';
+    
+    $stmt = $pdo->prepare("INSERT INTO servers (name, ip_address) VALUES (?, ?)");
+    $stmt->execute([$name, $ip_address]);
+    $success = "Server berhasil ditambahkan!";
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?page=servers');
+    exit;
+}
+
+// Handle Hapus Server (semua user yang login bisa)
+if (isLoggedIn() && isset($_GET['delete_server'])) {
+    $stmt = $pdo->prepare("DELETE FROM servers WHERE id = ?");
+    $stmt->execute([$_GET['delete_server']]);
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?page=servers');
+    exit;
+}
+
+// Handle Edit Server (semua user yang login bisa)
+if (isLoggedIn() && isset($_POST['edit_server'])) {
+    $id = $_POST['id'];
+    $name = $_POST['name'];
+    $ip_address = $_POST['ip_address'];
+    $status = $_POST['status'];
+    
+    $stmt = $pdo->prepare("UPDATE servers SET name = ?, ip_address = ?, status = ? WHERE id = ?");
+    $stmt->execute([$name, $ip_address, $status, $id]);
+    $success = "Server berhasil diupdate!";
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?page=servers');
+    exit;
+}
+
+// Get Current Page
+$page = $_GET['page'] ?? (isMainAdmin() ? 'dashboard' : 'users');
+?>
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' name='viewport'>
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title') | Pterodactyl</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css">
-    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/css/AdminLTE.min.css">
-    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/css/skins/_all-skins.min.css">
-    @yield('css')
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Pterodactyl</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .login-box h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e1e1;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .btn-login:hover {
+            transform: translateY(-2px);
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .nav-brand {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .nav-brand span {
+            color: #667eea;
+        }
+        
+        .nav-menu {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .nav-menu a {
+            text-decoration: none;
+            color: #555;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+        
+        .nav-menu a:hover, .nav-menu a.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .nav-menu .user-info {
+            background: #f0f0f0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .nav-menu .logout {
+            background: #fee;
+            color: #c33;
+        }
+        
+        .nav-menu .logout:hover {
+            background: #c33;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .content-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .content-header h1 {
+            color: #333;
+            font-size: 24px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+        }
+        
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .role-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+        }
+        
+        .role-admin {
+            background: #cce5ff;
+            color: #004085;
+        }
+        
+        .role-user {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+        
+        .main-admin-badge {
+            background: #dc3545;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 5px;
+        }
+        
+        .admin-badge {
+            background: #ffc107;
+            color: #333;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 5px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .system-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .system-info a {
+            color: white;
+            text-decoration: underline;
+        }
+        
+        .dashboard-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .stat-card h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        
+        .stat-card p {
+            font-size: 36px;
+            font-weight: bold;
+        }
+        
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .menu-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+        
+        .menu-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .menu-item h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .menu-item p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        
+        .welcome-message {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #17a2b8;
+        }
+    </style>
 </head>
-<body class="hold-transition skin-blue sidebar-mini">
-<div class="wrapper">
-    <header class="main-header">
-        <a href="{{ route('index') }}" class="logo">
-            <span class="logo-mini"><b>P</b>anel</span>
-            <span class="logo-lg"><b>Pterodactyl</b> Panel</span>
-        </a>
-        <nav class="navbar navbar-static-top">
-            <a href="#" class="sidebar-toggle" data-toggle="push-menu" role="button">
-                <span class="sr-only">Toggle navigation</span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-            </a>
-            <div class="navbar-custom-menu">
-                <ul class="nav navbar-nav">
-                    <li class="dropdown user user-menu">
-                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                            <img src="https://www.gravatar.com/avatar/{{ md5(Auth::user()->email ?? '') }}?s=160" class="user-image" alt="User Image">
-                            <span class="hidden-xs">{{ Auth::user()->name_first ?? '' }} {{ Auth::user()->name_last ?? '' }}</span>
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li class="user-header">
-                                <img src="https://www.gravatar.com/avatar/{{ md5(Auth::user()->email ?? '') }}?s=160" class="img-circle" alt="User Image">
-                                <p>{{ Auth::user()->name_first ?? '' }} {{ Auth::user()->name_last ?? '' }}<small>{{ Auth::user()->email ?? '' }}</small></p>
-                            </li>
-                            <li class="user-footer">
-                                <div class="pull-left">
-                                    <a href="{{ route('account') }}" class="btn btn-default btn-flat">Account</a>
-                                </div>
-                                <div class="pull-right">
-                                    <a href="{{ route('auth.logout') }}" class="btn btn-default btn-flat">Sign out</a>
-                                </div>
-                            </li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-        </nav>
-    </header>
-
-    <aside class="main-sidebar">
-        <section class="sidebar">
-            <div class="user-panel">
-                <div class="pull-left image">
-                    <img src="https://www.gravatar.com/avatar/{{ md5(Auth::user()->email ?? '') }}?s=160" class="img-circle" alt="User Image">
-                </div>
-                <div class="pull-left info">
-                    <p>{{ Auth::user()->name_first ?? '' }} {{ Auth::user()->name_last ?? '' }}</p>
-                    <a href="#"><i class="fa fa-circle text-success"></i> Online</a>
+<body>
+    <?php if (!isLoggedIn()): ?>
+        <!-- Halaman Login -->
+        <div class="login-container">
+            <div class="login-box">
+                <h2>🔐 Admin Panel Login</h2>
+                <?php if (isset($error)): ?>
+                    <div class="error"><?php echo $error; ?></div>
+                <?php endif; ?>
+                <form method="POST">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" name="password" required>
+                    </div>
+                    <button type="submit" name="login" class="btn-login">Login</button>
+                </form>
+                <div style="text-align: center; margin-top: 20px; color: #666; font-size: 14px;">
+                    <p>Default Admin: admin / admin123</p>
                 </div>
             </div>
-
-            @php
-                $user = Auth::user();
-                $isMasterAdmin = ($user && $user->id === 1);
-                $allowedMenus = [
-                    'dashboard' => true,
-                    'locations' => $isMasterAdmin,
-                    'users' => true,
-                    'servers' => true,
-                    'nodes' => $isMasterAdmin,
-                    'allocations' => $isMasterAdmin,
-                    'nests' => $isMasterAdmin,
-                    'settings' => $isMasterAdmin,
-                    'api' => $isMasterAdmin,
-                    'mounts' => $isMasterAdmin,
-                    'database' => $isMasterAdmin
-                ];
-            @endphp
-
-            <ul class="sidebar-menu" data-widget="tree">
-                <li class="header">NAVIGATION</li>
+        </div>
+    <?php else: ?>
+        <!-- Navigation Bar -->
+        <div class="navbar">
+            <div class="nav-brand">
+                Pterodactyl <span>Admin</span>
+            </div>
+            <div class="nav-menu">
+                <?php if (isMainAdmin()): ?>
+                    <a href="?page=dashboard" class="<?php echo $page == 'dashboard' ? 'active' : ''; ?>">Dashboard</a>
+                <?php endif; ?>
                 
-                <li class="{{ request()->routeIs('admin.index') ? 'active' : '' }}">
-                    <a href="{{ route('admin.index') }}"><i class="fa fa-home"></i> <span>Dashboard</span></a>
-                </li>
-
-                @if($allowedMenus['locations'])
-                <li class="treeview {{ request()->routeIs('admin.locations.*') ? 'active' : '' }}">
-                    <a href="#"><i class="fa fa-code-fork"></i> <span>Locations</span><span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
-                    <ul class="treeview-menu">
-                        <li class="{{ request()->routeIs('admin.locations') ? 'active' : '' }}"><a href="{{ route('admin.locations') }}"><i class="fa fa-circle-o"></i> All Locations</a></li>
-                    </ul>
-                </li>
-                @endif
-
-                <li class="treeview {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-                    <a href="#"><i class="fa fa-users"></i> <span>Users</span><span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
-                    <ul class="treeview-menu">
-                        <li class="{{ request()->routeIs('admin.users') ? 'active' : '' }}"><a href="{{ route('admin.users') }}"><i class="fa fa-circle-o"></i> All Users</a></li>
-                        <li class="{{ request()->routeIs('admin.users.new') ? 'active' : '' }}"><a href="{{ route('admin.users.new') }}"><i class="fa fa-circle-o"></i> Create New</a></li>
-                    </ul>
-                </li>
-
-                <li class="treeview {{ request()->routeIs('admin.servers.*') ? 'active' : '' }}">
-                    <a href="#"><i class="fa fa-server"></i> <span>Servers</span><span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
-                    <ul class="treeview-menu">
-                        <li class="{{ request()->routeIs('admin.servers') ? 'active' : '' }}"><a href="{{ route('admin.servers') }}"><i class="fa fa-circle-o"></i> All Servers</a></li>
-                        <li class="{{ request()->routeIs('admin.servers.new') ? 'active' : '' }}"><a href="{{ route('admin.servers.new') }}"><i class="fa fa-circle-o"></i> Create New</a></li>
-                    </ul>
-                </li>
-
-                @if($allowedMenus['nodes'])
-                <li class="treeview {{ request()->routeIs('admin.nodes.*') ? 'active' : '' }}">
-                    <a href="#"><i class="fa fa-object-group"></i> <span>Nodes</span><span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
-                    <ul class="treeview-menu">
-                        <li class="{{ request()->routeIs('admin.nodes') ? 'active' : '' }}"><a href="{{ route('admin.nodes') }}"><i class="fa fa-circle-o"></i> All Nodes</a></li>
-                        <li class="{{ request()->routeIs('admin.nodes.new') ? 'active' : '' }}"><a href="{{ route('admin.nodes.new') }}"><i class="fa fa-circle-o"></i> Create New</a></li>
-                    </ul>
-                </li>
-                @endif
-
-                @if($allowedMenus['allocations'])
-                <li class="treeview {{ request()->routeIs('admin.allocations.*') ? 'active' : '' }}">
-                    <a href="#"><i class="fa fa-exchange"></i> <span>Allocations</span><span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
-                    <ul class="treeview-menu">
-                        <li class="{{ request()->routeIs('admin.allocations') ? 'active' : '' }}"><a href="{{ route('admin.allocations') }}"><i class="fa fa-circle-o"></i> Manage Allocations</a></li>
-                    </ul>
-                </li>
-                @endif
-
-                @if($allowedMenus['nests'])
-                <li class="treeview {{ request()->routeIs('admin.nests.*') ? 'active' : '' }}">
-                    <a href="#"><i class="fa fa-cubes"></i> <span>Nests & Eggs</span><span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
-                    <ul class="treeview-menu">
-                        <li class="{{ request()->routeIs('admin.nests') ? 'active' : '' }}"><a href="{{ route('admin.nests') }}"><i class="fa fa-circle-o"></i> All Nests</a></li>
-                    </ul>
-                </li>
-                @endif
-
-                @if($allowedMenus['settings'])
-                <li class="treeview {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}">
-                    <a href="#"><i class="fa fa-cogs"></i> <span>Settings</span><span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span></a>
-                    <ul class="treeview-menu">
-                        <li class="{{ request()->routeIs('admin.settings') ? 'active' : '' }}"><a href="{{ route('admin.settings') }}"><i class="fa fa-circle-o"></i> General Settings</a></li>
-                        <li class="{{ request()->routeIs('admin.settings.mail') ? 'active' : '' }}"><a href="{{ route('admin.settings.mail') }}"><i class="fa fa-circle-o"></i> Mail Settings</a></li>
-                        <li class="{{ request()->routeIs('admin.settings.advanced') ? 'active' : '' }}"><a href="{{ route('admin.settings.advanced') }}"><i class="fa fa-circle-o"></i> Advanced Settings</a></li>
-                    </ul>
-                </li>
-                @endif
-
-                @if($allowedMenus['api'])
-                <li class="{{ request()->routeIs('admin.api.*') ? 'active' : '' }}"><a href="{{ route('admin.api') }}"><i class="fa fa-code"></i> <span>API</span></a></li>
-                @endif
-            </ul>
-
-            @if($user && !$isMasterAdmin && $user->root_admin)
-            <div class="alert alert-warning sidebar-alert" style="margin: 10px; padding: 10px;">
-                <i class="fa fa-lock"></i> <strong>Limited Mode</strong>
-                <small style="display: block; margin-top: 5px;">Contact @kaaahost1 for full access</small>
+                <!-- Menu Users selalu tampil untuk semua user -->
+                <a href="?page=users" class="<?php echo $page == 'users' ? 'active' : ''; ?>">Users</a>
+                
+                <!-- Menu Servers selalu tampil untuk semua user -->
+                <a href="?page=servers" class="<?php echo $page == 'servers' ? 'active' : ''; ?>">Servers</a>
+                
+                <?php if (isMainAdmin()): ?>
+                    <a href="?page=all" class="<?php echo $page == 'all' ? 'active' : ''; ?>">All Menu</a>
+                <?php endif; ?>
+                
+                <span class="user-info">
+                    👤 <?php echo $_SESSION['username']; ?>
+                    <?php if (isMainAdmin()): ?>
+                        <span class="main-admin-badge">Main Admin</span>
+                    <?php elseif (isAdmin()): ?>
+                        <span class="admin-badge">Admin</span>
+                    <?php endif; ?>
+                </span>
+                <a href="?logout=1" class="logout">Logout</a>
             </div>
-            @endif
-        </section>
-    </aside>
-
-    <div class="content-wrapper">
-        <section class="content-header">@yield('content-header')</section>
-        <section class="content">@yield('content')</section>
-    </div>
-
-    <footer class="main-footer">
-        <div class="pull-right hidden-xs"><b>Version</b> {{ config('app.version') }}</div>
-        <strong>Copyright &copy; 2015 - {{ date('Y') }} <a href="https://pterodactyl.io">Pterodactyl Software</a>.</strong> All rights reserved.
-        <br/>Protected by <a href="https://t.me/kaaahost1">@kaaahost1 Security System</a>
-    </footer>
-</div>
-
-<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/js/adminlte.min.js"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/jquery-slimscroll/1.3.8/jquery.slimscroll.min.js"></script>
-@yield('footer-scripts')
-
-<style>
-.sidebar-alert { border-radius: 3px; background-color: #f39c12; color: white; border: none; }
-.sidebar-alert a { color: white; text-decoration: underline; }
-</style>
+        </div>
+        
+        <div class="container">
+            <!-- System Info -->
+            <div class="system-info">
+                <strong>⚠️ System Information:</strong> Your panel is using version 1.12.1 | 
+                <a href="#">Get Help (via GitHub)</a> | 
+                Copyright © 2025
+            </div>
+            
+            <!-- Welcome Message berdasarkan role -->
+            <div class="welcome-message">
+                <strong>Selamat datang, <?php echo $_SESSION['username']; ?>!</strong><br>
+                <?php if (isMainAdmin()): ?>
+                    Anda login sebagai <strong>Admin Utama (ID: 1)</strong> dengan akses penuh ke semua fitur.
+                <?php elseif (isAdmin()): ?>
+                    Anda login sebagai <strong>Admin (ID: <?php echo $_SESSION['user_id']; ?>)</strong> dengan akses terbatas.
+                <?php else: ?>
+                    Anda login sebagai <strong>User (ID: <?php echo $_SESSION['user_id']; ?>)</strong> dengan akses terbatas.
+                <?php endif; ?>
+            </div>
+            
+            <!-- Info Box untuk non-main admin -->
+            <?php if (!isMainAdmin()): ?>
+            <div class="info-box">
+                <strong>ℹ️ Informasi Akses:</strong> Anda hanya dapat mengakses menu Users (view only) dan Servers (full access).
+                <?php if (isAdmin() && !isMainAdmin()): ?>
+                <br><small>Sebagai admin (bukan main admin), Anda hanya bisa melihat daftar users tanpa bisa mengedit/menghapus.</small>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Success Message -->
+            <?php if (isset($success)): ?>
+                <div class="alert alert-success"><?php echo $success; ?></div>
+            <?php endif; ?>
+            
+            <!-- Dashboard Page (Hanya untuk Main Admin ID 1) -->
+            <?php if ($page == 'dashboard' && isMainAdmin()): ?>
+                <div class="content-card">
+                    <div class="content-header">
+                        <h1>📊 Dashboard Overview</h1>
+                    </div>
+                    
+                    <?php
+                    $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+                    $totalServers = $pdo->query("SELECT COUNT(*) FROM servers")->fetchColumn();
+                    $totalAdmins = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
+                    $totalMainAdmin = $pdo->query("SELECT COUNT(*) FROM users WHERE id = 1")->fetchColumn();
+                    $activeServers = $pdo->query("SELECT COUNT(*) FROM servers WHERE status = 'active'")->fetchColumn();
+                    ?>
+                    
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <h3>Total Users</h3>
+                            <p><?php echo $totalUsers; ?></p>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                            <h3>Total Servers</h3>
+                            <p><?php echo $totalServers; ?></p>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);">
+                            <h3>Total Admins</h3>
+                            <p><?php echo $totalAdmins; ?></p>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);">
+                            <h3>Active Servers</h3>
+                            <p><?php echo $activeServers; ?></p>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 20px;">
+                        <h3>System Information</h3>
+                        <table style="width: 100%;">
+                            <tr>
+                                <td>Main Admin (ID 1):</td>
+                                <td><strong><?php echo $totalMainAdmin > 0 ? 'Active' : 'Not Found'; ?></strong></td>
+                            </tr>
+                            <tr>
+                                <td>PHP Version:</td>
+                                <td><strong><?php echo phpversion(); ?></strong></td>
+                            </tr>
+                            <tr>
+                                <td>Database:</td>
+                                <td><strong>MySQL</strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
+            <!-- Users Page - Dengan akses berbeda berdasarkan role -->
+            <?php if ($page == 'users'): ?>
+                <div class="content-card">
+                    <div class="content-header">
+                        <h1>👥 User Management</h1>
+                        <?php if (isMainAdmin()): ?>
+                            <button class="btn btn-success" onclick="openModal('addUserModal')">+ Add User</button>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Created At</th>
+                                    <?php if (isMainAdmin()): ?>
+                                        <th>Actions</th>
+                                    <?php endif; ?>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $users = $pdo->query("SELECT * FROM users ORDER BY id DESC");
+                                while($user = $users->fetch()):
+                                ?>
+                                <tr>
+                                    <td><?php echo $user['id']; ?></td>
+                                    <td>
+                                        <?php echo htmlspecialchars($user['username']); ?>
+                                        <?php if ($user['id'] == 1): ?>
+                                            <span class="main-admin-badge">Main Admin</span>
+                                        <?php elseif ($user['role'] == 'admin'): ?>
+                                            <span class="admin-badge">Admin</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <span class="role-badge role-<?php echo $user['role']; ?>">
+                                            <?php echo ucfirst($user['role']); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="status-badge status-active">
+                                            Active
+                                        </span>
+                                    </td>
+                                    <td><?php echo $user['created_at']; ?></td>
+                                    <?php if (isMainAdmin()): ?>
+                                        <td class="action-buttons">
+                                            <?php if ($user['id'] != 1): ?>
+                                                <button class="btn btn-warning btn-small" onclick="editUser(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['username']); ?>', '<?php echo $user['role']; ?>')">Edit</button>
+                                                <a href="?page=users&delete_user=<?php echo $user['id']; ?>" class="btn btn-danger btn-small" onclick="return confirm('Hapus user ini?')">Delete</a>
+                                            <?php else: ?>
+                                                <span style="color: #999; font-style: italic;">Main Admin - No actions</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endif; ?>
+                                </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
+            <!-- Servers Page - Semua user bisa akses penuh -->
+            <?php if ($page == 'servers'): ?>
+                <div class="content-card">
+                    <div class="content-header">
+                        <h1>🖥️ Server Management</h1>
+                        <button class="btn btn-success" onclick="openModal('addServerModal')">+ Add Server</button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>IP Address</th>
+                                    <th>Status</th>
+                                    <th>Created At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $servers = $pdo->query("SELECT * FROM servers ORDER BY id DESC");
+                                while($server = $servers->fetch()):
+                                ?>
+                                <tr>
+                                    <td><?php echo $server['id']; ?></td>
+                                    <td><?php echo htmlspecialchars($server['name']); ?></td>
+                                    <td><?php echo $server['ip_address']; ?></td>
+                                    <td>
+                                        <span class="status-badge status-<?php echo $server['status']; ?>">
+                                            <?php echo ucfirst($server['status']); ?>
+                                        </span>
+                                    </td>
+                                    <td><?php echo $server['created_at']; ?></td>
+                                    <td class="action-buttons">
+                                        <button class="btn btn-warning btn-small" onclick="editServer(<?php echo $server['id']; ?>, '<?php echo htmlspecialchars($server['name']); ?>', '<?php echo $server['ip_address']; ?>', '<?php echo $server['status']; ?>')">Edit</button>
+                                        <a href="?page=servers&delete_server=<?php echo $server['id']; ?>" class="btn btn-danger btn-small" onclick="return confirm('Hapus server ini?')">Delete</a>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
+            <!-- All Menu (Khusus Main Admin ID 1) -->
+            <?php if ($page == 'all' && isMainAdmin()): ?>
+                <div class="content-card">
+                    <div class="content-header">
+                        <h1>📋 Complete Administration</h1>
+                        <span class="main-admin-badge">Main Admin Only</span>
+                    </div>
+                    
+                    <h2 style="margin: 20px 0;">Basic Administration</h2>
+                    <div class="menu-grid">
+                        <div class="menu-item">
+                            <h3>📊 Overview</h3>
+                            <p>System statistics and monitoring</p>
+                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Overview - Hanya untuk Main Admin')">View</button>
+                        </div>
+                        <div class="menu-item">
+                            <h3>⚙️ Settings</h3>
+                            <p>Configure system settings</p>
+                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Settings - Hanya untuk Main Admin')">View</button>
+                        </div>
+                        <div class="menu-item">
+                            <h3>🔑 Application API</h3>
+                            <p>Manage API access</p>
+                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur API - Hanya untuk Main Admin')">View</button>
+                        </div>
+                    </div>
+                    
+                    <h2 style="margin: 20px 0;">Management</h2>
+                    <div class="menu-grid">
+                        <div class="menu-item">
+                            <h3>🗄️ Databases</h3>
+                            <p>Manage databases</p>
+                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Databases - Hanya untuk Main Admin')">View</button>
+                        </div>
+                        <div class="menu-item">
+                            <h3>📍 Locations</h3>
+                            <p>Server locations</p>
+                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Locations - Hanya untuk Main Admin')">View</button>
+                        </div>
+                        <div class="menu-item">
+                            <h3>🌐 Nodes</h3>
+                            <p>Manage nodes</p>
+                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Nodes - Hanya untuk Main Admin')">View</button>
+                        </div>
+                        <div class="menu-item">
+                            <h3>🖥️ Servers</h3>
+                            <p>Server management</p>
+                            <a href="?page=servers" class="btn btn-primary btn-small" style="margin-top: 10px;">View</a>
+                        </div>
+                        <div class="menu-item">
+                            <h3>👥 Users</h3>
+                            <p>User management</p>
+                            <a href="?page=users" class="btn btn-primary btn-small" style="margin-top: 10px;">View</a>
+                        </div>
+                    </div>
+                    
+                    <h2 style="margin: 20px 0;">Service Management</h2>
+                    <div class="menu-grid">
+                        <div class="menu-item">
+                            <h3>💾 Mounts</h3>
+                            <p>Manage mounts</p>
+                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Mounts - Hanya untuk Main Admin')">View</button>
+                        </div>
+                        <div class="menu-item">
+                            <h3>🏠 Nests</h3>
+                            <p>Manage nests</p>
+                            <button class="btn btn-primary btn-small" style="margin-top: 10px;" onclick="alert('Fitur Nests - Hanya untuk Main Admin')">View</button>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                        <h3>Main Admin Information</h3>
+                        <p><strong>ID:</strong> 1</p>
+                        <p><strong>Username:</strong> admin</p>
+                        <p><strong>Role:</strong> Main Admin (Full Access)</p>
+                        <p><strong>Status:</strong> <span class="status-badge status-active">Active</span></p>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+        
+        <!-- Modal Add User (Khusus Main Admin ID 1) -->
+        <?php if (isMainAdmin()): ?>
+        <div id="addUserModal" class="modal">
+            <div class="modal-content">
+                <h2>Tambah User Baru</h2>
+                <form method="POST">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" name="password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select name="role">
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('addUserModal')">Batal</button>
+                        <button type="submit" name="add_user" class="btn btn-primary">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Modal Edit User (Khusus Main Admin ID 1) -->
+        <div id="editUserModal" class="modal">
+            <div class="modal-content">
+                <h2>Edit User</h2>
+                <form method="POST">
+                    <input type="hidden" name="id" id="edit_user_id">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" name="username" id="edit_username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password Baru (kosongkan jika tidak ingin mengubah)</label>
+                        <input type="password" name="new_password">
+                    </div>
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select name="role" id="edit_role">
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('editUserModal')">Batal</button>
+                        <button type="submit" name="edit_user" class="btn btn-primary">Update</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+        
+        <!-- Modal Add Server (Semua user bisa akses) -->
+        <div id="addServerModal" class="modal">
+            <div class="modal-content">
+                <h2>Tambah Server Baru</h2>
+                <form method="POST">
+                    <div class="form-group">
+                        <label>Nama Server</label>
+                        <input type="text" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>IP Address</label>
+                        <input type="text" name="ip_address">
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('addServerModal')">Batal</button>
+                        <button type="submit" name="add_server" class="btn btn-primary">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Modal Edit Server (Semua user bisa akses) -->
+        <div id="editServerModal" class="modal">
+            <div class="modal-content">
+                <h2>Edit Server</h2>
+                <form method="POST">
+                    <input type="hidden" name="id" id="edit_server_id">
+                    <div class="form-group">
+                        <label>Nama Server</label>
+                        <input type="text" name="name" id="edit_server_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>IP Address</label>
+                        <input type="text" name="ip_address" id="edit_server_ip">
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status" id="edit_server_status">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('editServerModal')">Batal</button>
+                        <button type="submit" name="edit_server" class="btn btn-primary">Update</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <script>
+            function openModal(modalId) {
+                document.getElementById(modalId).classList.add('active');
+            }
+            
+            function closeModal(modalId) {
+                document.getElementById(modalId).classList.remove('active');
+            }
+            
+            function editUser(id, username, role) {
+                document.getElementById('edit_user_id').value = id;
+                document.getElementById('edit_username').value = username;
+                document.getElementById('edit_role').value = role;
+                openModal('editUserModal');
+            }
+            
+            function editServer(id, name, ip, status) {
+                document.getElementById('edit_server_id').value = id;
+                document.getElementById('edit_server_name').value = name;
+                document.getElementById('edit_server_ip').value = ip;
+                document.getElementById('edit_server_status').value = status;
+                openModal('editServerModal');
+            }
+            
+            // Close modal when clicking outside
+            window.onclick = function(event) {
+                if (event.target.classList.contains('modal')) {
+                    event.target.classList.remove('active');
+                }
+            }
+        </script>
+    <?php endif; ?>
 </body>
 </html>
-EOF
-echo -e "${GREEN}[✓]${NC} Admin layout installed"
-
-# Install settings view
-cat > "$PTERO_PATH/resources/views/admin/settings/index.blade.php" << 'EOF'
-@extends('layouts.admin')
-
-@section('title') Settings @endsection
-
-@section('content-header')
-    <h1>Settings<small>Configure your Panel settings.</small></h1>
-    <ol class="breadcrumb">
-        <li><a href="{{ route('admin.index') }}">Admin</a></li>
-        <li class="active">Settings</li>
-    </ol>
-@endsection
-
-@section('content')
-@php
-    $user = Auth::user();
-    $isMasterAdmin = ($user && $user->id === 1);
-@endphp
-
-<div class="row">
-    <div class="col-xs-12 col-md-8 col-md-offset-2">
-        @if($isMasterAdmin)
-        <div class="box">
-            <div class="box-header with-border">
-                <h3 class="box-title">General Settings</h3>
-            </div>
-            <form action="{{ route('admin.settings') }}" method="POST">
-                @csrf
-                <div class="box-body">
-                    <div class="form-group">
-                        <label for="app_name">App Name</label>
-                        <input type="text" class="form-control" id="app_name" name="app_name" value="{{ config('app.name') }}" placeholder="Pterodactyl">
-                        <p class="help-block">The name of your panel.</p>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="app_url">App URL</label>
-                        <input type="text" class="form-control" id="app_url" name="app_url" value="{{ config('app.url') }}" placeholder="https://panel.example.com">
-                        <p class="help-block">The URL where your panel is accessible.</p>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="app_timezone">Timezone</label>
-                        <select class="form-control" id="app_timezone" name="app_timezone">
-                            <option value="UTC" {{ config('app.timezone') == 'UTC' ? 'selected' : '' }}>UTC</option>
-                            <option value="Asia/Jakarta" {{ config('app.timezone') == 'Asia/Jakarta' ? 'selected' : '' }}>Asia/Jakarta (WIB)</option>
-                            <option value="Asia/Makassar" {{ config('app.timezone') == 'Asia/Makassar' ? 'selected' : '' }}>Asia/Makassar (WITA)</option>
-                            <option value="Asia/Jayapura" {{ config('app.timezone') == 'Asia/Jayapura' ? 'selected' : '' }}>Asia/Jayapura (WIT)</option>
-                        </select>
-                        <p class="help-block">The default timezone for the panel.</p>
-                    </div>
-                </div>
-                <div class="box-footer">
-                    <button type="submit" class="btn btn-primary pull-right">Save Settings</button>
-                </div>
-            </form>
-        </div>
-        @else
-        <div class="box box-warning">
-            <div class="box-header with-border">
-                <i class="fa fa-lock"></i>
-                <h3 class="box-title">Restricted Access</h3>
-            </div>
-            <div class="box-body">
-                <div class="alert alert-warning">
-                    <h4><i class="icon fa fa-warning"></i> Limited Access Mode</h4>
-                    <p>You are currently in limited access mode. Only User and Server management features are available.</p>
-                    <p>Contact Master Administrator <strong>@kaaahost1</strong> for full access to settings and advanced features.</p>
-                </div>
-                
-                <div class="text-center" style="margin-top: 20px;">
-                    <a href="https://t.me/kaaahost1" target="_blank" class="btn btn-primary">
-                        <i class="fa fa-telegram"></i> Contact @kaaahost1
-                    </a>
-                    <a href="{{ route('admin.users') }}" class="btn btn-success">
-                        <i class="fa fa-users"></i> Manage Users
-                    </a>
-                    <a href="{{ route('admin.servers') }}" class="btn btn-info">
-                        <i class="fa fa-server"></i> Manage Servers
-                    </a>
-                </div>
-            </div>
-            <div class="box-footer">
-                <small class="text-muted">Your access level: Regular Admin</small>
-            </div>
-        </div>
-        @endif
-    </div>
-</div>
-@endsection
-EOF
-echo -e "${GREEN}[✓]${NC} Settings view installed"
-
-echo -e "\n${YELLOW}[5/7]${NC} Installing ServiceProvider..."
-# Install AppServiceProvider
-backup_file "$PTERO_PATH/app/Providers/AppServiceProvider.php"
-cat > "$PTERO_PATH/app/Providers/AppServiceProvider.php" << 'EOF'
-<?php
-
-namespace Pterodactyl\Providers;
-
-use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\View;
-use Pterodactyl\Helpers\AdminHelper;
-
-class AppServiceProvider extends ServiceProvider
-{
-    public function register()
-    {
-        $this->app->singleton('admin.helper', function ($app) {
-            return new AdminHelper();
-        });
-    }
-
-    public function boot()
-    {
-        View::composer('*', function ($view) {
-            $view->with('adminHelper', app('admin.helper'));
-        });
-        
-        View::share('adminHelper', new AdminHelper());
-    }
-}
-EOF
-echo -e "${GREEN}[✓]${NC} AppServiceProvider installed"
-
-echo -e "\n${YELLOW}[6/7]${NC} Updating routes..."
-# Update routes (tambahkan ke file routes/admin.php yang sudah ada)
-cat >> "$PTERO_PATH/routes/admin.php" << 'EOF'
-
-// ===== ACCESS CONTROL ROUTES =====
-// Settings - hanya master admin
-Route::group(['middleware' => function ($request, $next) {
-    if (auth()->user() && auth()->user()->id !== 1) {
-        abort(403, 'Settings access restricted to master admin only. Contact @kaaahost1');
-    }
-    return $next($request);
-}], function () {
-    Route::get('/settings', 'Admin\SettingsController@index')->name('admin.settings');
-    Route::post('/settings', 'Admin\SettingsController@update');
-    Route::get('/settings/mail', 'Admin\SettingsController@mail')->name('admin.settings.mail');
-    Route::post('/settings/mail', 'Admin\SettingsController@updateMail');
-    Route::get('/settings/advanced', 'Admin\SettingsController@advanced')->name('admin.settings.advanced');
-    Route::post('/settings/advanced', 'Admin\SettingsController@updateAdvanced');
-});
-
-// Locations - hanya master admin
-Route::group(['middleware' => function ($request, $next) {
-    if (auth()->user() && auth()->user()->id !== 1) {
-        abort(403, 'Locations access restricted to master admin only. Contact @kaaahost1');
-    }
-    return $next($request);
-}], function () {
-    Route::get('/locations', 'Admin\LocationController@index')->name('admin.locations');
-    Route::get('/locations/new', 'Admin\LocationController@create')->name('admin.locations.new');
-    Route::post('/locations/new', 'Admin\LocationController@store');
-    Route::get('/locations/view/{id}', 'Admin\LocationController@view')->name('admin.locations.view');
-    Route::post('/locations/view/{id}', 'Admin\LocationController@update');
-});
-
-// Nodes - hanya master admin
-Route::group(['middleware' => function ($request, $next) {
-    if (auth()->user() && auth()->user()->id !== 1) {
-        abort(403, 'Nodes access restricted to master admin only. Contact @kaaahost1');
-    }
-    return $next($request);
-}], function () {
-    Route::get('/nodes', 'Admin\NodeController@index')->name('admin.nodes');
-    Route::get('/nodes/new', 'Admin\NodeController@create')->name('admin.nodes.new');
-    Route::post('/nodes/new', 'Admin\NodeController@store');
-    Route::get('/nodes/view/{id}', 'Admin\NodeController@view')->name('admin.nodes.view');
-    Route::post('/nodes/view/{id}', 'Admin\NodeController@update');
-    Route::delete('/nodes/delete/{id}', 'Admin\NodeController@delete')->name('admin.nodes.delete');
-});
-
-// Nests - hanya master admin
-Route::group(['middleware' => function ($request, $next) {
-    if (auth()->user() && auth()->user()->id !== 1) {
-        abort(403, 'Nests access restricted to master admin only. Contact @kaaahost1');
-    }
-    return $next($request);
-}], function () {
-    Route::get('/nests', 'Admin\NestController@index')->name('admin.nests');
-    Route::get('/nests/new', 'Admin\NestController@create')->name('admin.nests.new');
-    Route::post('/nests/new', 'Admin\NestController@store');
-    Route::get('/nests/view/{id}', 'Admin\NestController@view')->name('admin.nests.view');
-    Route::post('/nests/view/{id}', 'Admin\NestController@update');
-    Route::delete('/nests/delete/{id}', 'Admin\NestController@delete')->name('admin.nests.delete');
-});
-EOF
-echo -e "${GREEN}[✓]${NC} Routes updated"
-
-echo -e "\n${YELLOW}[7/7]${NC} Clearing cache..."
-# Clear cache
-cd "$PTERO_PATH" && php artisan view:clear && php artisan cache:clear && php artisan config:clear
-echo -e "${GREEN}[✓]${NC} Cache cleared"
-
-echo -e "\n${GREEN}${BOLD}"
-echo "╔══════════════════════════════════════════════════════════════════╗"
-echo "║         INSTALLATION COMPLETED SUCCESSFULLY!                    ║"
-echo "║         MASTER ADMIN (ID 1) ACCESS CONTROL ACTIVE               ║"
-echo "╚══════════════════════════════════════════════════════════════════╝"
-echo -e "${NC}"
-
-echo -e "${CYAN}${BOLD}SUMMARY:${NC}"
-echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}✓${NC} Master Admin (ID 1): ${GREEN}FULL ACCESS${NC} to all menus"
-echo -e "${YELLOW}✓${NC} Regular Admins: ${YELLOW}LIMITED ACCESS${NC} (Users & Servers only)"
-echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${PURPLE}Contact Master Admin:${NC} ${BOLD}@kaaahost1${NC}"
-echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-
-echo -e "${YELLOW}Backup files created with timestamp: ${TIMESTAMP}${NC}"
-echo -e "${RED}⚠️  System is now protected - Only Master Admin (ID 1) has full access ⚠️${NC}\n"
